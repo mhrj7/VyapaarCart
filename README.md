@@ -158,7 +158,7 @@ erDiagram
 
 2. **Start the core infrastructure (PostgreSQL, Redis, Redpanda, MinIO)**
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 3. **Set up the Python environment**
