@@ -1,66 +1,167 @@
-# HookRelay — Webhook Infrastructure for SaaS Products
+# VyapaarCart — Multi-vendor Marketplace for Independent Sellers
 
-HookRelay is a developer-facing SaaS platform that allows companies to easily create, manage, and dispatch webhook events (e.g., `order.created`, `payment.failed`, `user.invited`) reliably to their customers. 
+**VyapaarCart** is a robust, multi-vendor e-commerce platform designed for small and independent sellers (Think: Amazon Marketplace + Seller Dashboard). Built with a modern, event-driven backend, the platform enables sellers to seamlessly manage inventory, list products, and fulfill orders while offering buyers a smooth storefront experience.
 
-When your system needs to publish an event, you send it to HookRelay once. HookRelay guarantees at-least-once delivery, handles exponential backoff, rate limiting, duplicate events, and provides a dead-letter queue (DLQ) for failed deliveries. It features a complete transactional outbox architecture utilizing Kafka/Redpanda.
+At its core, VyapaarCart handles high-concurrency inventory reservation, safe payment processing via idempotency, and asynchronous order workflows using a transactional outbox pattern to prevent overselling. 
 
-## 🚀 Features
+## 🚀 Product Overview
 
-- **Organization & Environment Management**: Create orgs, projects, and environments (Test/Production).
-- **Endpoint Subscriptions**: Customers can create webhook endpoints and subscribe to specific events.
-- **Reliable Delivery**: At-least-once delivery semantics powered by Kafka/Redpanda.
-- **Idempotency & Retry Policies**: Support for idempotency keys and automatic exponential backoff for failing endpoints.
-- **Transactional Outbox**: Guarantees that internal database transactions and event publishing are atomically linked.
-- **Security**: HMAC webhook signatures and API key management with secret rotation.
-- **Rate Limiting**: Endpoint-level rate limiting to prevent overwhelming customer servers.
-- **Audit & Replay**: Inspect delivery logs, response times, and failure reasons. One-click replay for failed deliveries.
-- **Observability**: Built-in OpenTelemetry tracing, Prometheus metrics, and Grafana dashboards.
+- **Buyers**: Browse products, search, add items to cart, secure checkout, and track orders.
+- **Sellers**: Create stores, manage product listings/SKUs, upload images, manage multi-warehouse inventory, process orders, and view sales metrics.
+- **Admins**: Approve sellers, review products, manage disputes, refunds, calculate platform commissions, and monitor system health.
 
 ## 🏗️ Architecture
 
-```text
-Client → FastAPI API → PostgreSQL (Transactional Outbox)
-                         ↓
-                    Kafka / Redpanda
-                         ↓
-         Delivery workers → Customer Webhook Endpoint
-                         ↓
-          Retries / DLQ / Replay / Audit Dashboard
+VyapaarCart is built as a **Modular Monolith** using Python and FastAPI, designed to seamlessly evolve into microservices as the product scales.
+
+```mermaid
+flowchart TD
+    subgraph Frontend
+        BuyerUI[Buyer Storefront - Next.js]
+        SellerUI[Seller Dashboard - Next.js]
+        AdminUI[Admin Portal - Next.js]
+    end
+
+    subgraph API Gateway / Auth
+        FastAPI[VyapaarCart API Gateway & Core Modules]
+        Auth[JWT Authentication & Role Auth]
+    end
+
+    subgraph Backend Modules
+        Identity[Identity & Onboarding]
+        Catalog[Catalog & Search]
+        Inventory[Inventory Reservation]
+        Order[Order Management]
+        Payment[Payment Gateway Abstraction]
+    end
+
+    subgraph Infrastructure
+        PostgreSQL[(PostgreSQL)]
+        Redis[(Redis)]
+        Broker{Kafka / Redpanda}
+        Storage[S3 / MinIO Object Storage]
+    end
+
+    BuyerUI --> FastAPI
+    SellerUI --> FastAPI
+    AdminUI --> FastAPI
+    
+    FastAPI --> Auth
+    FastAPI --> Identity & Catalog & Inventory & Order & Payment
+    
+    Identity & Catalog & Inventory & Order & Payment --> PostgreSQL
+    Catalog & Inventory & Auth --> Redis
+    
+    Order -- Transactional Outbox --> Broker
+    Broker --> WebhookDelivery[Webhook / Event Delivery Workers]
+    
+    Catalog --> Storage
 ```
 
 ## 🛠️ Technology Stack
 
-- **Language:** Python 3.11+
-- **API Framework:** FastAPI, Pydantic
-- **Database:** PostgreSQL, SQLAlchemy, Alembic (Migrations)
-- **Message Broker:** Kafka / Redpanda
-- **Caching & Rate Limiting:** Redis
+- **Frontend:** Next.js, TypeScript, Tailwind CSS
+- **Backend:** Python, FastAPI, Pydantic, SQLAlchemy, Alembic
+- **Database:** PostgreSQL
+- **Cache & Rate Limiting:** Redis
+- **Message Broker:** Kafka or Redpanda
+- **Object Storage:** MinIO / AWS S3
 - **Containerization:** Docker & Docker Compose
-- **Observability:** OpenTelemetry, Prometheus, Grafana, Loki, Tempo
-- **Testing:** Pytest, Testcontainers, k6 (Load Testing)
+- **Testing:** Pytest (Backend), Playwright (E2E)
+- **Observability:** OpenTelemetry, Prometheus, Grafana, Loki (Structured Logs)
 - **CI/CD:** GitHub Actions
-- **Infrastructure as Code:** Terraform + AWS ECS/Fargate (or Kubernetes + Helm)
 
-## 📦 Getting Started (Local Development)
+## 🌊 Event Flow: Checkout & Order Creation
 
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
+The core checkout process utilizes idempotency, inventory reservation, and a transactional outbox to ensure data consistency.
 
-### Running Locally
+```mermaid
+sequenceDiagram
+    participant Buyer
+    participant API as FastAPI Backend
+    participant DB as PostgreSQL
+    participant Broker as Redpanda / Kafka
+    
+    Buyer->>API: POST /checkout (with Idempotency Key)
+    API->>DB: Reserve Inventory (Row-level lock / Expiry)
+    DB-->>API: Reservation Success
+    API->>API: Process Payment (Mock/Stripe)
+    API->>DB: BEGIN TRANSACTION
+    API->>DB: Update Inventory (Confirm Stock)
+    API->>DB: Create Order Record
+    API->>DB: Insert Event to Outbox (order.created)
+    API->>DB: COMMIT TRANSACTION
+    API-->>Buyer: 201 Created (Order ID)
+    
+    DB->>Broker: Async Outbox Relay
+    Broker->>API: Consume 'order.created'
+    API->>API: Notify Seller & Dispatch Webhooks
+```
+
+## 📊 Database Schema (Core Modules)
+
+```mermaid
+erDiagram
+    USERS ||--o{ STORES : manages
+    STORES ||--o{ PRODUCTS : lists
+    PRODUCTS ||--o{ SKUS : contains
+    SKUS ||--o{ INVENTORY : stocked_in
+    USERS ||--o{ ORDERS : places
+    ORDERS ||--o{ ORDER_ITEMS : contains
+    SKUS ||--o{ ORDER_ITEMS : included_in
+
+    USERS {
+        int id PK
+        string email
+        string hashed_password
+        enum role "buyer, seller, admin"
+    }
+    STORES {
+        int id PK
+        int owner_id FK
+        string name
+        boolean is_approved
+    }
+    PRODUCTS {
+        int id PK
+        int store_id FK
+        string title
+        string description
+    }
+    SKUS {
+        int id PK
+        int product_id FK
+        string sku_code
+        decimal price
+    }
+    INVENTORY {
+        int id PK
+        int sku_id FK
+        int quantity_available
+        int quantity_reserved
+    }
+    ORDERS {
+        int id PK
+        int buyer_id FK
+        string status
+        decimal total_amount
+    }
+```
+
+## 📦 Local Setup Instructions
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/HookRelay.git
-   cd HookRelay
+   git clone https://github.com/mhrj7/VyapaarCart.git
+   cd VyapaarCart
    ```
 
-2. **Start the infrastructure (PostgreSQL, Redis, Redpanda, Grafana)**
+2. **Start the core infrastructure (PostgreSQL, Redis, Redpanda, MinIO)**
    ```bash
    docker-compose up -d
    ```
 
-3. **Install dependencies**
+3. **Set up the Python environment**
    ```bash
    python -m venv venv
    source venv/bin/activate
@@ -77,31 +178,43 @@ Client → FastAPI API → PostgreSQL (Transactional Outbox)
    uvicorn src.api.main:app --reload
    ```
 
-6. **Start the Delivery Worker**
+6. **Start the Background Worker** (For outbox processing and webhook delivery)
    ```bash
-   python -m src.workers.delivery_worker
+   python -m src.workers.event_dispatcher
    ```
 
-## 🧪 Testing
+## 📚 API Documentation
 
-Run the test suite using `pytest` (utilizes Testcontainers for spinning up disposable PostgreSQL/Kafka instances):
+Once the server is running locally, navigate to the auto-generated Swagger UI:
+- **Swagger / OpenAPI Specs**: `http://localhost:8000/docs`
 
-```bash
-pytest
-```
+## 🧪 Test Strategy
 
-## 📋 Roadmap & Implementation Details
+- **Unit Tests**: Isolated testing of business logic (e.g., cart total calculation, role checks).
+- **Integration Tests**: `pytest` combined with `testcontainers` for real database and Redis interactions. Validates inventory locking, rate limiting, and transactional outbox inserts.
+- **E2E Tests**: Playwright scripts simulating complete user journeys (Buyer checkout, Seller onboarding).
 
-- [x] Initial project setup and architecture design
-- [ ] Implement Organization & API Key models
-- [ ] Build Transactional Outbox pattern with SQLAlchemy
-- [ ] Integrate Redpanda/Kafka producer
-- [ ] Build the Delivery Worker (consumers, HTTP dispatcher)
-- [ ] Implement HMAC signing for webhook payloads
-- [ ] Add exponential backoff and DLQ logic
-- [ ] Integrate Redis rate-limiting
-- [ ] Set up OpenTelemetry, Loki, and Grafana
+## 📈 Load Testing & Metrics
 
-## 📄 License
+Load tests are executed using `k6` to stress test the inventory reservation and checkout endpoints to ensure that overselling is impossible under high concurrency. 
 
-This project is licensed under the MIT License.
+*(Note: Actual metrics will be published here once the V1 benchmark is executed on the CI pipeline.)*
+
+## 🚢 Production Deployment Plan
+
+- **Infrastructure as Code**: Terraform to provision AWS resources.
+- **Compute**: FastAPI and Worker processes deployed as containers on AWS ECS (Fargate).
+- **Database**: Amazon RDS for PostgreSQL (Multi-AZ for high availability).
+- **Cache**: Amazon ElastiCache (Redis).
+- **Events**: Amazon MSK (Managed Kafka) or Confluent Cloud.
+- **Storage**: Amazon S3 for product images.
+- **CI/CD**: GitHub Actions pipeline covering linting, testing, Docker image build, and ECS rolling deployments.
+
+## ⚠️ Known Limitations & Next Steps
+
+- **Webhook Infrastructure**: The webhook delivery mechanism (retries, DLQ, replay) currently resides within the VyapaarCart monolith.
+- **Next Step**: Extract the webhook delivery and event management system into an independent SaaS project called **HookRelay** to provide dedicated webhook infrastructure.
+- **Search**: Currently relies on standard SQL queries. Will integrate Elasticsearch or Typesense for advanced product discovery and filtering.
+
+---
+*Built as a scalable, high-performance portfolio project.*

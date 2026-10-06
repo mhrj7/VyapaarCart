@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: hookrelay
-      POSTGRES_PASSWORD: hookrelay_password
-      POSTGRES_DB: hookrelay
+      POSTGRES_USER: vyapaarcart
+      POSTGRES_PASSWORD: vyapaarcart_password
+      POSTGRES_DB: vyapaarcart
     ports:
       - "5432:5432"
     volumes:
@@ -36,6 +36,18 @@ services:
       - "18082:18082"
       - "19092:19092"
       - "19644:9644"
+      
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: vyapaarcart_admin
+      MINIO_ROOT_PASSWORD: vyapaarcart_minio_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
 
   grafana:
     image: grafana/grafana:latest
@@ -46,3 +58,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:
