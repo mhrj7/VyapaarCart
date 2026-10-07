@@ -1,220 +1,44 @@
-# VyapaarCart — Multi-vendor Marketplace for Independent Sellers
+# VyapaarCart
 
-**VyapaarCart** is a robust, multi-vendor e-commerce platform designed for small and independent sellers (Think: Amazon Marketplace + Seller Dashboard). Built with a modern, event-driven backend, the platform enables sellers to seamlessly manage inventory, list products, and fulfill orders while offering buyers a smooth storefront experience.
+VyapaarCart is a full-stack local marketplace for buying and selling pre-owned goods. It is built as a production-style backend portfolio project: authenticated users can manage listings, upload images, save favourites, message sellers, request orders, use Razorpay test payments, and follow a local shipping workflow.
 
-At its core, VyapaarCart handles high-concurrency inventory reservation, safe payment processing via idempotency, and asynchronous order workflows using a transactional outbox pattern to prevent overselling. 
+## What it demonstrates
 
-## 🚀 Product Overview
+- Next.js App Router with typed API routes
+- Clerk authentication for email and social sign-in
+- Neon Postgres with Drizzle ORM and relational data modelling
+- Vercel Blob for image uploads and cleanup
+- Buyer–seller conversations, favourites, seller dashboards, and listing lifecycle management
+- Razorpay test-mode payment order creation and server-side signature verification
+- Local shipping simulator with pickup profiles, shipment states, tracking events, and delivery handover
+- Search, filters, sorting, shareable listing pages, Open Graph metadata, and responsive UI
 
-- **Buyers**: Browse products, search, add items to cart, secure checkout, and track orders.
-- **Sellers**: Create stores, manage product listings/SKUs, upload images, manage multi-warehouse inventory, process orders, and view sales metrics.
-- **Admins**: Approve sellers, review products, manage disputes, refunds, calculate platform commissions, and monitor system health.
+## Stack
 
-## 🏗️ Architecture
+Next.js 16 · TypeScript · React 19 · Clerk · Neon Postgres · Drizzle ORM · Vercel Blob · Razorpay (test mode) · Vercel
 
-VyapaarCart is built as a **Modular Monolith** using Python and FastAPI, designed to seamlessly evolve into microservices as the product scales.
+## Run locally
 
-```mermaid
-flowchart TD
-    subgraph Frontend
-        BuyerUI[Buyer Storefront - Next.js]
-        SellerUI[Seller Dashboard - Next.js]
-        AdminUI[Admin Portal - Next.js]
-    end
+1. Copy `.env.example` to `.env.local` and add your own credentials.
+2. Install dependencies with `npm install`.
+3. Create the database tables with `npm run db:push`.
+4. Start the app with `npm run dev`.
 
-    subgraph API Gateway / Auth
-        FastAPI[VyapaarCart API Gateway & Core Modules]
-        Auth[JWT Authentication & Role Auth]
-    end
+## Environment variables
 
-    subgraph Backend Modules
-        Identity[Identity & Onboarding]
-        Catalog[Catalog & Search]
-        Inventory[Inventory Reservation]
-        Order[Order Management]
-        Payment[Payment Gateway Abstraction]
-    end
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Neon Postgres connection string |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob upload and delete access |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk client-side key |
+| `CLERK_SECRET_KEY` | Clerk server-side key |
+| `RAZORPAY_TEST_KEY_ID` | Razorpay test publishable key |
+| `RAZORPAY_TEST_KEY_SECRET` | Razorpay test secret |
 
-    subgraph Infrastructure
-        PostgreSQL[(PostgreSQL)]
-        Redis[(Redis)]
-        Broker{Kafka / Redpanda}
-        Storage[S3 / MinIO Object Storage]
-    end
+Do not commit real credentials. The app remains usable for browsing without Razorpay; sign-in, uploads, and payment verification require the related variables.
 
-    BuyerUI --> FastAPI
-    SellerUI --> FastAPI
-    AdminUI --> FastAPI
-    
-    FastAPI --> Auth
-    FastAPI --> Identity & Catalog & Inventory & Order & Payment
-    
-    Identity & Catalog & Inventory & Order & Payment --> PostgreSQL
-    Catalog & Inventory & Auth --> Redis
-    
-    Order -- Transactional Outbox --> Broker
-    Broker --> WebhookDelivery[Webhook / Event Delivery Workers]
-    
-    Catalog --> Storage
-```
+## Project notes
 
-## 🛠️ Technology Stack
-
-- **Frontend:** Next.js, TypeScript, Tailwind CSS
-- **Backend:** Python, FastAPI, Pydantic, SQLAlchemy, Alembic
-- **Database:** PostgreSQL
-- **Cache & Rate Limiting:** Redis
-- **Message Broker:** Kafka or Redpanda
-- **Object Storage:** MinIO / AWS S3
-- **Containerization:** Docker & Docker Compose
-- **Testing:** Pytest (Backend), Playwright (E2E)
-- **Observability:** OpenTelemetry, Prometheus, Grafana, Loki (Structured Logs)
-- **CI/CD:** GitHub Actions
-
-## 🌊 Event Flow: Checkout & Order Creation
-
-The core checkout process utilizes idempotency, inventory reservation, and a transactional outbox to ensure data consistency.
-
-```mermaid
-sequenceDiagram
-    participant Buyer
-    participant API as FastAPI Backend
-    participant DB as PostgreSQL
-    participant Broker as Redpanda / Kafka
-    
-    Buyer->>API: POST /checkout (with Idempotency Key)
-    API->>DB: Reserve Inventory (Row-level lock / Expiry)
-    DB-->>API: Reservation Success
-    API->>API: Process Payment (Mock/Stripe)
-    API->>DB: BEGIN TRANSACTION
-    API->>DB: Update Inventory (Confirm Stock)
-    API->>DB: Create Order Record
-    API->>DB: Insert Event to Outbox (order.created)
-    API->>DB: COMMIT TRANSACTION
-    API-->>Buyer: 201 Created (Order ID)
-    
-    DB->>Broker: Async Outbox Relay
-    Broker->>API: Consume 'order.created'
-    API->>API: Notify Seller & Dispatch Webhooks
-```
-
-## 📊 Database Schema (Core Modules)
-
-```mermaid
-erDiagram
-    USERS ||--o{ STORES : manages
-    STORES ||--o{ PRODUCTS : lists
-    PRODUCTS ||--o{ SKUS : contains
-    SKUS ||--o{ INVENTORY : stocked_in
-    USERS ||--o{ ORDERS : places
-    ORDERS ||--o{ ORDER_ITEMS : contains
-    SKUS ||--o{ ORDER_ITEMS : included_in
-
-    USERS {
-        int id PK
-        string email
-        string hashed_password
-        enum role "buyer, seller, admin"
-    }
-    STORES {
-        int id PK
-        int owner_id FK
-        string name
-        boolean is_approved
-    }
-    PRODUCTS {
-        int id PK
-        int store_id FK
-        string title
-        string description
-    }
-    SKUS {
-        int id PK
-        int product_id FK
-        string sku_code
-        decimal price
-    }
-    INVENTORY {
-        int id PK
-        int sku_id FK
-        int quantity_available
-        int quantity_reserved
-    }
-    ORDERS {
-        int id PK
-        int buyer_id FK
-        string status
-        decimal total_amount
-    }
-```
-
-## 📦 Local Setup Instructions
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/mhrj7/VyapaarCart.git
-   cd VyapaarCart
-   ```
-
-2. **Start the core infrastructure (PostgreSQL, Redis, Redpanda, MinIO)**
-   ```bash
-   docker compose up -d
-   ```
-
-3. **Set up the Python environment**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-4. **Run Database Migrations**
-   ```bash
-   alembic upgrade head
-   ```
-
-5. **Start the API Server**
-   ```bash
-   uvicorn src.api.main:app --reload
-   ```
-
-6. **Start the Background Worker** (For outbox processing and webhook delivery)
-   ```bash
-   python -m src.workers.event_dispatcher
-   ```
-
-## 📚 API Documentation
-
-Once the server is running locally, navigate to the auto-generated Swagger UI:
-- **Swagger / OpenAPI Specs**: `http://localhost:8000/docs`
-
-## 🧪 Test Strategy
-
-- **Unit Tests**: Isolated testing of business logic (e.g., cart total calculation, role checks).
-- **Integration Tests**: `pytest` combined with `testcontainers` for real database and Redis interactions. Validates inventory locking, rate limiting, and transactional outbox inserts.
-- **E2E Tests**: Playwright scripts simulating complete user journeys (Buyer checkout, Seller onboarding).
-
-## 📈 Load Testing & Metrics
-
-Load tests are executed using `k6` to stress test the inventory reservation and checkout endpoints to ensure that overselling is impossible under high concurrency. 
-
-*(Note: Actual metrics will be published here once the V1 benchmark is executed on the CI pipeline.)*
-
-## 🚢 Production Deployment Plan
-
-- **Infrastructure as Code**: Terraform to provision AWS resources.
-- **Compute**: FastAPI and Worker processes deployed as containers on AWS ECS (Fargate).
-- **Database**: Amazon RDS for PostgreSQL (Multi-AZ for high availability).
-- **Cache**: Amazon ElastiCache (Redis).
-- **Events**: Amazon MSK (Managed Kafka) or Confluent Cloud.
-- **Storage**: Amazon S3 for product images.
-- **CI/CD**: GitHub Actions pipeline covering linting, testing, Docker image build, and ECS rolling deployments.
-
-## ⚠️ Known Limitations & Next Steps
-
-- **Webhook Infrastructure**: The webhook delivery mechanism (retries, DLQ, replay) currently resides within the VyapaarCart monolith.
-- **Next Step**: Extract the webhook delivery and event management system into an independent SaaS project called **HookRelay** to provide dedicated webhook infrastructure.
-- **Search**: Currently relies on standard SQL queries. Will integrate Elasticsearch or Typesense for advanced product discovery and filtering.
-
----
-*Built as a scalable, high-performance portfolio project.*
+- Payments operate only in Razorpay test mode.
+- Delivery is deliberately a local, deterministic simulator for portfolio demonstration; it does not book a real courier.
+- Production service keys should be set in Vercel, never committed to the repository.
