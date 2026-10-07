@@ -1,44 +1,179 @@
 # VyapaarCart
 
-VyapaarCart is a full-stack local marketplace for buying and selling pre-owned goods. It is built as a production-style backend portfolio project: authenticated users can manage listings, upload images, save favourites, message sellers, request orders, use Razorpay test payments, and follow a local shipping workflow.
+> A full-stack local marketplace for pre-owned goods, built to demonstrate an end-to-end buyer–seller workflow: authenticated listing management, conversations, favourites, test payments, and a delivery lifecycle.
 
-## What it demonstrates
+[Live demo](https://vyapaarcart.vercel.app) · [Source code](https://github.com/mhrj7/VyapaarCart)
 
-- Next.js App Router with typed API routes
-- Clerk authentication for email and social sign-in
-- Neon Postgres with Drizzle ORM and relational data modelling
-- Vercel Blob for image uploads and cleanup
-- Buyer–seller conversations, favourites, seller dashboards, and listing lifecycle management
-- Razorpay test-mode payment order creation and server-side signature verification
-- Local shipping simulator with pickup profiles, shipment states, tracking events, and delivery handover
-- Search, filters, sorting, shareable listing pages, Open Graph metadata, and responsive UI
+## Why this project
 
-## Stack
+VyapaarCart models the core workflow of a local marketplace such as OLX: a seller posts a listing, a buyer discovers it, contacts the seller, requests an order, completes a test payment after acceptance, and follows a delivery status timeline. It is deliberately implemented as a modular Next.js application backed by a relational database rather than as a static UI demo.
 
-Next.js 16 · TypeScript · React 19 · Clerk · Neon Postgres · Drizzle ORM · Vercel Blob · Razorpay (test mode) · Vercel
+## Current capabilities
 
-## Run locally
-
-1. Copy `.env.example` to `.env.local` and add your own credentials.
-2. Install dependencies with `npm install`.
-3. Create the database tables with `npm run db:push`.
-4. Start the app with `npm run dev`.
-
-## Environment variables
-
-| Variable | Purpose |
+| Area | Implemented behaviour |
 | --- | --- |
-| `DATABASE_URL` | Neon Postgres connection string |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob upload and delete access |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk client-side key |
-| `CLERK_SECRET_KEY` | Clerk server-side key |
-| `RAZORPAY_TEST_KEY_ID` | Razorpay test publishable key |
-| `RAZORPAY_TEST_KEY_SECRET` | Razorpay test secret |
+| Identity | Clerk sign-in with the existing email/social configuration; protected write operations on the server |
+| Listings | Create, edit, archive, and delete seller-owned listings; search, category/city/price filters, and sorting |
+| Images | Validated JPG, PNG, and WebP uploads up to 5 MB; public objects stored in Vercel Blob and deleted with their listing |
+| Marketplace | Favourites, buyer–seller conversations, seller dashboard, and shareable listing pages with metadata |
+| Orders | Buyer order requests, seller decision flow, order history, and persisted payment/shipping data |
+| Payments | Razorpay test-order creation and server-side HMAC signature verification |
+| Delivery | Seller pickup profile, local deterministic shipment simulator, tracking events, and handover state |
+| Platform | Neon Postgres schema with foreign keys and indexes; deployed on Vercel |
 
-Do not commit real credentials. The app remains usable for browsing without Razorpay; sign-in, uploads, and payment verification require the related variables.
+## Architecture
 
-## Project notes
+```mermaid
+flowchart LR
+  U[Buyer or seller] --> W[Next.js web application]
+  W --> A[Next.js route handlers]
+  W --> C[Clerk client]
+  A --> C2[Clerk server authentication]
+  A --> D[(Neon Postgres)]
+  A --> B[Vercel Blob]
+  A --> R[Razorpay test API]
+  A --> S[Local delivery simulator]
 
-- Payments operate only in Razorpay test mode.
-- Delivery is deliberately a local, deterministic simulator for portfolio demonstration; it does not book a real courier.
-- Production service keys should be set in Vercel, never committed to the repository.
+  subgraph Vercel
+    W
+    A
+  end
+```
+
+The application is a **modular monolith**: page modules and typed route handlers share a single database schema. This keeps the project straightforward to run and reason about while leaving natural boundaries for future extraction, such as payment, notifications, and event delivery.
+
+## Core buyer–seller flow
+
+```mermaid
+sequenceDiagram
+  participant Seller
+  participant App as VyapaarCart API
+  participant Buyer
+  participant Razorpay as Razorpay test mode
+  participant Delivery as Delivery simulator
+
+  Seller->>App: Create listing and upload image
+  Buyer->>App: Discover listing / send message
+  Buyer->>App: Request order
+  Seller->>App: Accept order
+  Buyer->>Razorpay: Complete test checkout
+  Razorpay-->>Buyer: Payment result
+  Buyer->>App: Send payment identifiers
+  App->>App: Verify HMAC signature and mark paid
+  Seller->>App: Create shipment / hand over parcel
+  App->>Delivery: Advance local tracking state
+  Delivery-->>Buyer: Tracking timeline
+```
+
+## Data model
+
+```mermaid
+erDiagram
+  USERS ||--o{ LISTINGS : creates
+  USERS ||--o{ FAVOURITES : saves
+  LISTINGS ||--o{ FAVOURITES : is_saved
+  LISTINGS ||--o{ CONVERSATIONS : concerns
+  USERS ||--o{ CONVERSATIONS : buyer_or_seller
+  CONVERSATIONS ||--o{ MESSAGES : contains
+  USERS ||--o{ MESSAGES : sends
+  LISTINGS ||--o{ ORDERS : ordered_as
+  USERS ||--o{ ORDERS : buys_or_sells
+  ORDERS ||--o| SHIPMENTS : fulfils
+  SHIPMENTS ||--o{ SHIPMENT_EVENTS : records
+  USERS ||--o| SELLER_PICKUP_PROFILES : owns
+```
+
+The database schema includes ownership relationships, cascading deletes, uniqueness constraints for duplicate buyer/listing orders and shipment identifiers, and query indexes for active listings, conversations, orders, shipments, and tracking events.
+
+## Technology choices
+
+| Layer | Choice | Reason |
+| --- | --- | --- |
+| Web + API | Next.js 16, React 19, TypeScript | One typed application for UI and server-side route handlers |
+| Authentication | Clerk | Managed sign-in and secure server-side identity checks |
+| Database | Neon Postgres + Drizzle ORM | Relational integrity with type-safe SQL access and migrations |
+| Object storage | Vercel Blob | Direct, validated listing-image storage without storing files in the database |
+| Test payment | Razorpay | Realistic order creation and signature verification without live charges |
+| Hosting | Vercel | Server-rendered Next.js deployment with managed environment variables |
+
+## Local setup
+
+### Prerequisites
+
+- Node.js 22 or newer
+- A Neon Postgres database
+- A Vercel Blob store
+- A Clerk application
+- Razorpay test keys if testing checkout
+
+### Run it
+
+```bash
+git clone https://github.com/mhrj7/VyapaarCart.git
+cd VyapaarCart
+cp .env.example .env.local
+npm install
+npm run db:push
+npm run dev
+```
+
+Open `http://localhost:3000`.
+
+### Environment variables
+
+| Variable | Required for | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | Persistent marketplace data | Neon Postgres connection string |
+| `BLOB_READ_WRITE_TOKEN` | Listing-image upload and deletion | Vercel Blob token |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Sign-in UI | Browser-safe Clerk key |
+| `CLERK_SECRET_KEY` | Protected API routes | Server-only Clerk key |
+| `RAZORPAY_TEST_KEY_ID` | Test checkout | Never use a live key in this project |
+| `RAZORPAY_TEST_KEY_SECRET` | Test payment verification | Server-only secret |
+
+Never commit real credentials. Vercel environment variables are used for the deployed application.
+
+## Verification performed
+
+- `npm run build` completes successfully with TypeScript checks.
+- `npm run lint` completes with no errors; the only remaining notices are four Next.js image-optimization warnings for user-uploaded image elements.
+- Production home page and the public listings endpoint return `200` from the Vercel deployment.
+- Database schema was applied to the connected Neon database.
+
+No performance or load-test figures are claimed because they have not yet been measured.
+
+## Intentional current limitations
+
+This repository **does not yet claim** to be the complete multi-vendor commerce platform described in the original roadmap. In particular, it does not yet include:
+
+- Seller organizations/staff roles, stores, product variants, SKUs, carts, or multi-warehouse inventory
+- Concurrent inventory reservation, idempotency keys, automatic stock release, or a true oversell-prevention test
+- Admin approval, disputes, refunds, commission accounting, or audit logs
+- Redis rate limiting, Kafka/Redpanda, transactional outbox, email notifications, or OpenTelemetry/Prometheus/Grafana
+- Webhook endpoints, HMAC-signed webhook deliveries, retry queues, delivery console, secret rotation, replay, or endpoint-level rate limits
+- Docker Compose, FastAPI, Alembic, pytest, Playwright, k6, or GitHub Actions CI
+- A real courier integration; delivery is a local simulator for safe testable workflows
+
+## Roadmap toward the flagship marketplace
+
+```mermaid
+flowchart LR
+  A[Current: local marketplace] --> B[Seller stores, SKUs, cart and inventory]
+  B --> C[Reservations, idempotent checkout and refunds]
+  C --> D[Transactional outbox and event broker]
+  D --> E[Signed webhook delivery and delivery console]
+  E --> F[Observability, load tests and CI]
+```
+
+The next highest-value milestone is **inventory reservations with idempotent checkout**. It creates a concrete concurrency problem to solve, makes the data model closer to a true marketplace, and provides the event source needed to build a separate webhook product later.
+
+## Resume-safe project description
+
+Use this now:
+
+> Built and deployed VyapaarCart, a full-stack local marketplace using Next.js, TypeScript, Neon Postgres, Drizzle, Clerk, Vercel Blob, and Razorpay test mode. Implemented authenticated listing management, image uploads, buyer–seller messaging, favourites, payment signature verification, and a persisted shipment-tracking workflow.
+
+Do **not** yet claim Kafka, Redis, FastAPI, inventory reservations, real courier integration, webhooks, or measured scale. Add those only after they are genuinely implemented and tested.
+
+## Licence
+
+Built as a personal portfolio project.
