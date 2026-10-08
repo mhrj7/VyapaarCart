@@ -15,6 +15,8 @@ VyapaarCart models the core workflow of a local marketplace such as OLX: a selle
 | Identity | Clerk sign-in with the existing email/social configuration; protected write operations on the server |
 | Listings | Create, edit, archive, and delete seller-owned listings; search, category/city/price filters, and sorting |
 | Images | Validated JPG, PNG, and WebP uploads up to 5 MB; new listing media is stored through an S3-compatible object-storage adapter and deleted with its listing |
+| Product media | Multiple images per product, persisted display order and metadata, seller upload/reorder/removal controls, and a public thumbnail gallery. Failed file deletion retains cleanup metadata for retry. [Implementation and verification](docs/product-media.md) |
+| Seller catalog | Approved sellers and assigned staff can manage public stores, categorized products, searchable attributes, and variants with unique SKUs and prices |
 | Marketplace | Favourites, buyer–seller conversations, seller dashboard, and shareable listing pages with metadata |
 | Orders | Buyer order requests, seller decision flow, order history, and persisted payment/shipping data |
 | Payments | Razorpay test-order creation and server-side HMAC signature verification |
@@ -160,12 +162,12 @@ No performance or load-test figures are claimed because they have not yet been m
 
 This repository **does not yet claim** to be the complete multi-vendor commerce platform described in the original roadmap. In particular, it does not yet include:
 
-- Seller organizations/staff roles, stores, product variants, SKUs, carts, or multi-warehouse inventory
+- Carts or multi-warehouse inventory
 - Concurrent inventory reservation, idempotency keys, automatic stock release, or a true oversell-prevention test
-- Admin approval, disputes, refunds, commission accounting, or audit logs
+- Disputes, refunds, or commission accounting
 - Redis rate limiting, Kafka/Redpanda, transactional outbox, email notifications, or OpenTelemetry/Prometheus/Grafana
 - Webhook endpoints, HMAC-signed webhook deliveries, retry queues, delivery console, secret rotation, replay, or endpoint-level rate limits
-- Docker Compose, FastAPI, Alembic, pytest, Playwright, k6, or GitHub Actions CI
+- FastAPI, Alembic, pytest, Playwright, k6, or GitHub Actions CI
 - A real courier integration; delivery is a local simulator for safe testable workflows
 
 ## Roadmap toward the flagship marketplace
@@ -185,7 +187,7 @@ The next highest-value milestone is **inventory reservations with idempotent che
 
 Use this now:
 
-> Built and deployed VyapaarCart, a full-stack local marketplace using Next.js, TypeScript, Neon Postgres, Drizzle, Clerk, Vercel Blob, and Razorpay test mode. Implemented authenticated listing management, image uploads, buyer–seller messaging, favourites, payment signature verification, and a persisted shipment-tracking workflow.
+> Built and deployed VyapaarCart, a full-stack local marketplace using Next.js, TypeScript, Neon Postgres, Drizzle, Clerk, S3-compatible storage, and Razorpay test mode. Implemented authenticated listing management, public seller stores, categorized products and SKU variants, ordered product galleries, buyer–seller messaging, payment signature verification, and a persisted simulated shipment-tracking workflow.
 
 Do **not** yet claim Kafka, Redis, FastAPI, inventory reservations, real courier integration, webhooks, or measured scale. Add those only after they are genuinely implemented and tested.
 

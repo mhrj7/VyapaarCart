@@ -36,6 +36,7 @@ function getClient(config: StorageConfig) {
   return new S3Client({
     endpoint: config.endpoint,
     region: config.region,
+    forcePathStyle: true,
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,

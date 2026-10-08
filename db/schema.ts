@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, primaryKey, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, primaryKey, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 const now = sql`CURRENT_TIMESTAMP::text`;
 
@@ -70,6 +70,24 @@ export const products = pgTable("products", {
   index("idx_products_store_status").on(table.storeId, table.status),
   index("idx_products_category_status").on(table.categoryId, table.status),
   index("idx_products_title").on(table.title),
+]);
+
+export const productImages = pgTable("product_images", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
+  objectKey: text("object_key").notNull(),
+  altText: text("alt_text").notNull(),
+  contentType: text("content_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  position: integer("position").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [
+  uniqueIndex("idx_product_images_object_key").on(table.objectKey),
+  index("idx_product_images_order").on(table.productId, table.status, table.position),
+  check("product_images_size_bytes_check", sql`${table.sizeBytes} > 0 AND ${table.sizeBytes} <= 5242880`),
+  check("product_images_position_check", sql`${table.position} >= 0`),
+  check("product_images_status_check", sql`${table.status} IN ('pending', 'active', 'deleting')`),
 ]);
 
 export const productAttributes = pgTable("product_attributes", {
