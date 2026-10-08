@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canBuy, canManageOwnRecord, canManageSeller, sellerAccountId, type Actor } from "../lib/authorization";
+import { canBuy, canInviteOrganizationStaff, canManageOwnRecord, canManageSeller, sellerAccountId, type Actor } from "../lib/authorization";
 
 const buyer: Actor = { id: 1, clerkId: "buyer", role: "buyer", staffForSellerId: null };
 const seller: Actor = { id: 2, clerkId: "seller", role: "seller", staffForSellerId: null };
@@ -22,4 +22,12 @@ test("buyer permissions and personal ownership rules are explicit", () => {
   assert.equal(canManageOwnRecord(buyer, 1), true);
   assert.equal(canManageOwnRecord(buyer, 2), false);
   assert.equal(canManageOwnRecord(admin, 2), true);
+});
+
+test("only the seller owner or an admin can invite organization staff", () => {
+  assert.equal(canInviteOrganizationStaff(seller, 2), true);
+  assert.equal(canInviteOrganizationStaff(seller, 9), false);
+  assert.equal(canInviteOrganizationStaff(staff, 2), false);
+  assert.equal(canInviteOrganizationStaff(buyer, 2), false);
+  assert.equal(canInviteOrganizationStaff(admin, 2), true);
 });

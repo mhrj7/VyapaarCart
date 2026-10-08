@@ -28,3 +28,7 @@ export function canBuy(actor: Actor) {
 export function canManageOwnRecord(actor: Actor, ownerId: number) {
   return actor.role === "admin" || actor.id === ownerId;
 }
+
+export function canInviteOrganizationStaff(actor: Actor, organizationOwnerId: number) {
+  return actor.role === "admin" || (actor.role === "seller" && actor.id === organizationOwnerId);
+}

@@ -3,6 +3,8 @@ import { getDb } from "../../../../../db";
 import { organizationMembers, organizations, users } from "../../../../../db/schema";
 import { requireUser } from "../../../../../lib/auth";
 import { actorFor, routeError } from "../../../../../lib/marketplace";
+import { canInviteOrganizationStaff } from "../../../../../lib/authorization";
+import { clerkClient } from "@clerk/nextjs/server";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -13,7 +15,7 @@ async function ownerActor(request: Request, organizationId: string) {
   const db = getDb();
   const actor = await actorFor(db, identity.clerkId);
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
-  if (!organization || (actor.role !== "admin" && organization.ownerId !== actor.id)) return null;
+  if (!organization || !canInviteOrganizationStaff(actor, organization.ownerId)) return null;
   return { db, actor, organization };
 }
 
@@ -32,12 +34,19 @@ export async function POST(request: Request, { params }: Context) {
     const { id } = await params;
     const result = await ownerActor(request, id);
     if (!result) return Response.json({ error: "Organization not found." }, { status: 404 });
-    const { clerkId, role } = await request.json() as { clerkId?: string; role?: string };
-    if (!clerkId?.trim()) return Response.json({ error: "Member Clerk user ID is required." }, { status: 400 });
+    const { email, role } = await request.json() as { email?: string; role?: string };
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) return Response.json({ error: "Enter a valid teammate email address." }, { status: 400 });
     const memberRole = role === "manager" ? "manager" : "member";
-    const member = await actorFor(result.db, clerkId.trim());
+    const client = await clerkClient();
+    const found = await client.users.getUserList({ emailAddress: [normalizedEmail], limit: 1 });
+    const invitedUser = found.data[0];
+    if (!invitedUser) return Response.json({ error: "This teammate needs to sign in to VyapaarCart once before you can invite them." }, { status: 404 });
+    const member = await actorFor(result.db, invitedUser.id);
+    if (member.id === result.organization.ownerId) return Response.json({ error: "The organization owner is already on this team." }, { status: 400 });
+    if (member.role !== "admin") await result.db.update(users).set({ role: "seller_staff", staffForSellerId: result.organization.ownerId }).where(eq(users.id, member.id));
     await result.db.insert(organizationMembers).values({ organizationId: id, userId: member.id, role: memberRole, createdAt: new Date().toISOString() }).onConflictDoUpdate({ target: [organizationMembers.organizationId, organizationMembers.userId], set: { role: memberRole } });
-    return Response.json({ member: { id: member.id, clerkId: member.clerkId, role: memberRole } }, { status: 201 });
+    return Response.json({ member: { id: member.id, displayName: invitedUser.fullName || invitedUser.username || normalizedEmail, role: memberRole } }, { status: 201 });
   } catch (error) { return routeError(error); }
 }
 
