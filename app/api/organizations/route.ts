@@ -1,8 +1,9 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { organizationMembers, organizations, users } from "../../../db/schema";
+import { organizationMembers, organizations } from "../../../db/schema";
 import { requireUser } from "../../../lib/auth";
 import { actorFor, routeError } from "../../../lib/marketplace";
+import { canOperateStore } from "../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +33,7 @@ export async function POST(request: Request) {
     if (!displayName) return Response.json({ error: "Organization name is required." }, { status: 400 });
     const db = getDb();
     const actor = await actorFor(db, identity.clerkId);
-    // Creating a team workspace is the explicit seller-onboarding action.
-    // A buyer becomes a seller at this point; administrators keep their role.
-    if (actor.role === "buyer") await db.update(users).set({ role: "seller" }).where(eq(users.id, actor.id));
-    if (actor.role !== "buyer" && actor.role !== "seller" && actor.role !== "admin") return Response.json({ error: "This account cannot create organizations." }, { status: 403 });
+    if (!canOperateStore(actor)) return Response.json({ error: "Seller approval is required before you can create a team workspace." }, { status: 403 });
     const organization = { id: crypto.randomUUID(), name: displayName, slug: `${slugify(displayName)}-${crypto.randomUUID().slice(0, 6)}`, ownerId: actor.id, createdAt: new Date().toISOString() };
     await db.insert(organizations).values(organization);
     await db.insert(organizationMembers).values({ organizationId: organization.id, userId: actor.id, role: "owner", createdAt: organization.createdAt });

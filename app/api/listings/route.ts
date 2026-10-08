@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, like, lte, or } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { listings, users } from "../../../db/schema";
+import { listings, sellerApprovalAudits, users } from "../../../db/schema";
 import { requireUser } from "../../../lib/auth";
 import {
   ensureUser,
@@ -8,7 +8,7 @@ import {
   serializeListing,
 } from "../../../lib/marketplace";
 import { isListingImageKey } from "../../../lib/object-storage";
-import { canManageSeller } from "../../../lib/authorization";
+import { canManageSeller, canOperateStore } from "../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -104,13 +104,19 @@ export async function POST(request: Request) {
     }
 
     const db = getDb();
-    let seller = await ensureUser(db, identity.clerkId);
-    if (seller.role === "buyer") {
-      [seller] = await db.update(users).set({ role: "seller" }).where(eq(users.id, seller.id)).returning();
+    const seller = await ensureUser(db, identity.clerkId);
+    const actor = { id: seller.id, clerkId: seller.clerkId, role: seller.role as "buyer" | "seller" | "seller_staff" | "admin", staffForSellerId: seller.staffForSellerId, sellerApprovalStatus: seller.sellerApprovalStatus as "not_requested" | "pending" | "approved" | "rejected" };
+    if (!canOperateStore(actor)) {
+      if (seller.role === "buyer" && seller.sellerApprovalStatus !== "pending") {
+        const now = new Date().toISOString();
+        await db.update(users).set({ sellerApprovalStatus: "pending", sellerApprovalRequestedAt: now }).where(eq(users.id, seller.id));
+        await db.insert(sellerApprovalAudits).values({ id: crypto.randomUUID(), sellerId: seller.id, action: "requested", previousStatus: seller.sellerApprovalStatus, nextStatus: "pending", createdAt: now });
+        return Response.json({ error: "Your seller approval request was submitted. An administrator must approve it before you can publish." }, { status: 202 });
+      }
+      return Response.json({ error: "Seller approval is required before you can publish listings." }, { status: 403 });
     }
-    if (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin") return Response.json({ error: "Only sellers can create listings." }, { status: 403 });
     const sellerId = seller.role === "seller_staff" ? seller.staffForSellerId : seller.id;
-    if (!sellerId || !canManageSeller({ id: seller.id, clerkId: seller.clerkId, role: seller.role as "seller" | "seller_staff" | "admin", staffForSellerId: seller.staffForSellerId }, sellerId)) return Response.json({ error: "Seller assignment is required." }, { status: 403 });
+    if (!sellerId || !canManageSeller(actor, sellerId)) return Response.json({ error: "Seller assignment is required." }, { status: 403 });
     const listing = {
       id: crypto.randomUUID(),
       sellerId,

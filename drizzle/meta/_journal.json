@@ -8,6 +8,13 @@
       "when": 1791390131168,
       "tag": "0000_glamorous_white_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791467000000,
+      "tag": "0001_seller_approval",
+      "breakpoints": true
     }
   ]
 }

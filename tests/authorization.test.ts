@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { canBuy, canInviteOrganizationStaff, canManageOwnRecord, canManageSeller, sellerAccountId, type Actor } from "../lib/authorization";
+import { canApproveSellers, canBuy, canInviteOrganizationStaff, canManageOwnRecord, canManageSeller, canOperateStore, sellerAccountId, type Actor } from "../lib/authorization";
 
-const buyer: Actor = { id: 1, clerkId: "buyer", role: "buyer", staffForSellerId: null };
-const seller: Actor = { id: 2, clerkId: "seller", role: "seller", staffForSellerId: null };
-const staff: Actor = { id: 3, clerkId: "staff", role: "seller_staff", staffForSellerId: 2 };
-const admin: Actor = { id: 4, clerkId: "admin", role: "admin", staffForSellerId: null };
+const buyer: Actor = { id: 1, clerkId: "buyer", role: "buyer", staffForSellerId: null, sellerApprovalStatus: "not_requested" };
+const seller: Actor = { id: 2, clerkId: "seller", role: "seller", staffForSellerId: null, sellerApprovalStatus: "approved" };
+const staff: Actor = { id: 3, clerkId: "staff", role: "seller_staff", staffForSellerId: 2, sellerApprovalStatus: "approved" };
+const pendingSeller: Actor = { id: 5, clerkId: "pending-seller", role: "seller", staffForSellerId: null, sellerApprovalStatus: "pending" };
+const admin: Actor = { id: 4, clerkId: "admin", role: "admin", staffForSellerId: null, sellerApprovalStatus: "not_requested" };
 
 test("seller staff can manage only their assigned seller account", () => {
   assert.equal(sellerAccountId(staff), 2);
@@ -30,4 +31,14 @@ test("only the seller owner or an admin can invite organization staff", () => {
   assert.equal(canInviteOrganizationStaff(staff, 2), false);
   assert.equal(canInviteOrganizationStaff(buyer, 2), false);
   assert.equal(canInviteOrganizationStaff(admin, 2), true);
+});
+
+test("seller approval gates store operation and reserves decisions for administrators", () => {
+  assert.equal(canOperateStore(seller), true);
+  assert.equal(canOperateStore(staff), true);
+  assert.equal(canOperateStore(pendingSeller), false);
+  assert.equal(canManageSeller(pendingSeller, 5), false);
+  assert.equal(canOperateStore(admin), true);
+  assert.equal(canApproveSellers(admin), true);
+  assert.equal(canApproveSellers(seller), false);
 });

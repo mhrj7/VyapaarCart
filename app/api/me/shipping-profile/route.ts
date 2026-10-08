@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { sellerPickupProfiles } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
 import { actorFor, routeError } from "../../../../lib/marketplace";
-import { sellerAccountId } from "../../../../lib/authorization";
+import { canOperateStore, sellerAccountId } from "../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 const required = ["contactName", "email", "phone", "address", "city", "state", "pincode"] as const;
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const db = getDb();
     const seller = await actorFor(db, identity.clerkId);
     const sellerId = sellerAccountId(seller);
-    if (!sellerId || (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin")) return Response.json({ error: "Only seller accounts can manage shipping setup." }, { status: 403 });
+    if (!sellerId || !canOperateStore(seller)) return Response.json({ error: "Seller approval is required before you can manage shipping setup." }, { status: 403 });
     const [profile] = await db.select().from(sellerPickupProfiles).where(eq(sellerPickupProfiles.sellerId, sellerId)).limit(1);
     return Response.json({ profile: profile || null });
   } catch (error) { return routeError(error); }
@@ -35,7 +35,7 @@ export async function PUT(request: Request) {
     const db = getDb();
     const seller = await actorFor(db, identity.clerkId);
     const sellerId = sellerAccountId(seller);
-    if (!sellerId || (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin")) return Response.json({ error: "Only seller accounts can manage shipping setup." }, { status: 403 });
+    if (!sellerId || !canOperateStore(seller)) return Response.json({ error: "Seller approval is required before you can manage shipping setup." }, { status: 403 });
     const profile = {
       sellerId, pickupLocation: `vyapaarcart-${sellerId}`, contactName: input.contactName!.trim(), email: input.email!.trim(), phone: input.phone!.trim(),
       address: input.address!.trim(), city: input.city!.trim(), state: input.state!.trim(), pincode: input.pincode!.trim(), country: "India", updatedAt: new Date().toISOString(),

@@ -9,8 +9,22 @@ export const users = pgTable("users", {
   displayName: text("display_name").notNull().default("VyapaarCart seller"),
   role: text("role").notNull().default("buyer"),
   staffForSellerId: integer("staff_for_seller_id"),
+  sellerApprovalStatus: text("seller_approval_status").notNull().default("not_requested"),
+  sellerApprovalRequestedAt: text("seller_approval_requested_at"),
+  sellerApprovedAt: text("seller_approved_at"),
+  sellerApprovedById: integer("seller_approved_by_id"),
   createdAt: text("created_at").notNull().default(now),
 }, (table) => [uniqueIndex("idx_users_clerk_id").on(table.clerkId)]);
+
+export const sellerApprovalAudits = pgTable("seller_approval_audits", {
+  id: text("id").primaryKey(),
+  sellerId: integer("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  adminId: integer("admin_id").references(() => users.id, { onDelete: "set null" }),
+  action: text("action").notNull(),
+  previousStatus: text("previous_status").notNull(),
+  nextStatus: text("next_status").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [index("idx_seller_approval_audits_seller_created_at").on(table.sellerId, table.createdAt)]);
 
 export const organizations = pgTable("organizations", {
   id: text("id").primaryKey(),

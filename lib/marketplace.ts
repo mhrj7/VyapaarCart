@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { getDb } from "../db";
 import { listings, users } from "../db/schema";
 import { isListingImageKey, publicImageUrl } from "./object-storage";
-import { canManageSeller, type Actor, isMarketplaceRole } from "./authorization";
+import { canManageSeller, type Actor, isMarketplaceRole, isSellerApprovalStatus } from "./authorization";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -18,7 +18,8 @@ export async function ensureUser(db: Db, clerkId: string) {
 export async function actorFor(db: Db, clerkId: string): Promise<Actor> {
   const user = await ensureUser(db, clerkId);
   if (!isMarketplaceRole(user.role)) throw new Error("User has an invalid marketplace role.");
-  return { id: user.id, clerkId: user.clerkId, role: user.role, staffForSellerId: user.staffForSellerId };
+  if (!isSellerApprovalStatus(user.sellerApprovalStatus)) throw new Error("User has an invalid seller approval status.");
+  return { id: user.id, clerkId: user.clerkId, role: user.role, staffForSellerId: user.staffForSellerId, sellerApprovalStatus: user.sellerApprovalStatus };
 }
 
 export function imageUrl(imageKey: string | null) {

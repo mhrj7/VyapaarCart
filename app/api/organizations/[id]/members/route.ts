@@ -44,7 +44,7 @@ export async function POST(request: Request, { params }: Context) {
     if (!invitedUser) return Response.json({ error: "This teammate needs to sign in to VyapaarCart once before you can invite them." }, { status: 404 });
     const member = await actorFor(result.db, invitedUser.id);
     if (member.id === result.organization.ownerId) return Response.json({ error: "The organization owner is already on this team." }, { status: 400 });
-    if (member.role !== "admin") await result.db.update(users).set({ role: "seller_staff", staffForSellerId: result.organization.ownerId }).where(eq(users.id, member.id));
+    if (member.role !== "admin") await result.db.update(users).set({ role: "seller_staff", staffForSellerId: result.organization.ownerId, sellerApprovalStatus: "approved" }).where(eq(users.id, member.id));
     await result.db.insert(organizationMembers).values({ organizationId: id, userId: member.id, role: memberRole, createdAt: new Date().toISOString() }).onConflictDoUpdate({ target: [organizationMembers.organizationId, organizationMembers.userId], set: { role: memberRole } });
     return Response.json({ member: { id: member.id, displayName: invitedUser.fullName || invitedUser.username || normalizedEmail, role: memberRole } }, { status: 201 });
   } catch (error) { return routeError(error); }
