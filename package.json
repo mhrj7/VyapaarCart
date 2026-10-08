@@ -19,6 +19,7 @@
     "@clerk/nextjs": "^7.0.8",
     "@neondatabase/serverless": "^1.0.2",
     "drizzle-orm": "0.45.2",
+    "jose": "^6.2.12",
     "next": "^16.2.6",
     "postgres": "^3.4.9",
     "react": "19.2.6",

@@ -22,6 +22,13 @@
       "when": 1791468500000,
       "tag": "0002_public_stores",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791470000000,
+      "tag": "0003_jwt_refresh_tokens",
+      "breakpoints": true
     }
   ]
 }

@@ -49,6 +49,24 @@ export const storeProducts = pgTable("store_products", {
   updatedAt: text("updated_at").notNull().default(now),
 }, (table) => [index("idx_store_products_store_status").on(table.storeId, table.status)]);
 
+// Refresh tokens are deliberately stored only as one-way hashes. A token can be
+// used once, then is replaced by a new token in the same family.
+export const refreshTokenSessions = pgTable("refresh_token_sessions", {
+  id: text("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  familyId: text("family_id").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  revokedAt: text("revoked_at"),
+  revocationReason: text("revocation_reason"),
+  replacedById: text("replaced_by_id"),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [
+  uniqueIndex("idx_refresh_token_sessions_token_hash").on(table.tokenHash),
+  index("idx_refresh_token_sessions_family_id").on(table.familyId),
+  index("idx_refresh_token_sessions_user_id").on(table.userId),
+]);
+
 export const organizations = pgTable("organizations", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
