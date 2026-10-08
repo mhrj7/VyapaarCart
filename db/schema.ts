@@ -82,6 +82,30 @@ export const productAttributes = pgTable("product_attributes", {
   index("idx_product_attributes_key_value").on(table.key, table.value),
 ]);
 
+export const productVariants = pgTable("product_variants", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  sku: text("sku").notNull(),
+  price: integer("price").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+}, (table) => [
+  uniqueIndex("idx_product_variants_sku").on(table.sku),
+  index("idx_product_variants_product_status").on(table.productId, table.status),
+]);
+
+export const productVariantAttributes = pgTable("product_variant_attributes", {
+  variantId: text("variant_id").notNull().references(() => productVariants.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [
+  primaryKey({ columns: [table.variantId, table.key] }),
+  index("idx_product_variant_attributes_key_value").on(table.key, table.value),
+]);
+
 // Refresh tokens are deliberately stored only as one-way hashes. A token can be
 // used once, then is replaced by a new token in the same family.
 export const refreshTokenSessions = pgTable("refresh_token_sessions", {
