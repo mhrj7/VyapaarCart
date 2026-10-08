@@ -36,7 +36,7 @@ export async function searchProducts(input: ReturnType<typeof parseProductSearch
   if (input.category) conditions.push(eq(categories.slug, input.category));
   if (input.seller) conditions.push(eq(stores.ownerId, input.seller));
   if (input.attributeKey) conditions.push(sql`exists (select 1 from ${productAttributes} where ${productAttributes.productId} = ${products.id} and ${productAttributes.key} = ${input.attributeKey} and lower(${productAttributes.value}) = lower(${input.attributeValue}))`);
-  const rank = input.q ? sql<number>`ts_rank_cd(${productSearchVector}, ${searchQuery})` : sql<number>`0`;
+  const rank = input.q ? sql<number>`ts_rank_cd(${productSearchVector}, ${searchQuery})` : sql<number>`0::real`;
   const rows = await db.select({ product: products, store: { id: stores.id, name: stores.name, slug: stores.slug, city: stores.city, sellerId: stores.ownerId }, category: { id: categories.id, name: categories.name, slug: categories.slug }, rank })
     .from(products).innerJoin(stores, eq(products.storeId, stores.id)).innerJoin(categories, eq(products.categoryId, categories.id))
     .where(and(...conditions)).orderBy(desc(rank), desc(products.createdAt), asc(products.id)).limit(input.limit + 1).offset(input.offset);

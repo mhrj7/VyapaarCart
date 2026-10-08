@@ -54,6 +54,10 @@ test("product search: SQL relevance, all filters, pagination, visibility and ind
     const first = await request(`q=${term}&limit=1`); assert.equal(first.pagination.nextOffset, 1);
     const second = await request(`q=${term}&limit=1&offset=1`); assert.notEqual(first.products[0].id, second.products[0].id);
     assert.equal((await request(`q=${term}&category=missing`)).products.length, 0);
+    assert.equal((await request("category=missing")).products.length, 0);
+    const browse = await request(`seller=${ownerIds[1]}`);
+    assert.equal(browse.products.length, 1);
+    assert.equal(browse.products[0].id, productIds[2]);
     assert.equal((await request(`q=${term}&seller=2147483647`)).products.length, 0);
     assert.equal((await request(`q=${term}%20phones`)).products.length, 2);
     assert.equal((await request("q=%25%27%3B--")).products.length, 0);
