@@ -2,6 +2,7 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
+import "./team-members.css";
 
 type TeamMember = { id: number; displayName: string; role: "owner" | "manager" | "member" };
 

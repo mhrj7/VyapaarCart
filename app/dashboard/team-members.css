@@ -1,0 +1,70 @@
+.team-members {
+  flex-basis: 100%;
+  width: 100%;
+  border-top: 1px solid #edf0ea;
+  margin-top: 4px;
+  padding-top: 16px;
+}
+
+.team-members h3 {
+  margin: 4px 0 6px;
+  font-size: 19px;
+}
+
+.team-members > p:not(.label):not(.notice) {
+  margin: 0 0 12px;
+  color: #68746e;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.team-members form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 8px;
+}
+
+.team-members input,
+.team-members select {
+  min-width: 0;
+  border: 1px solid #d8ddd6;
+  border-radius: 9px;
+  background: #fff;
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 12px;
+  color: #17251f;
+}
+
+.team-members button {
+  border: 0;
+  border-radius: 9px;
+  background: #17251f;
+  color: #fff;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.team-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 13px;
+}
+
+.team-list span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #17251f;
+}
+
+.team-list em {
+  color: #1f8a58;
+  font-style: normal;
+  text-transform: capitalize;
+}
+
+@media (max-width: 620px) {
+  .team-members form { grid-template-columns: 1fr; }
+}
