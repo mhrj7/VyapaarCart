@@ -49,6 +49,39 @@ export const storeProducts = pgTable("store_products", {
   updatedAt: text("updated_at").notNull().default(now),
 }, (table) => [index("idx_store_products_store_status").on(table.storeId, table.status)]);
 
+export const categories = pgTable("categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [uniqueIndex("idx_categories_slug").on(table.slug)]);
+
+export const products = pgTable("products", {
+  id: text("id").primaryKey(),
+  storeId: text("store_id").notNull().references(() => stores.id, { onDelete: "cascade" }),
+  categoryId: text("category_id").notNull().references(() => categories.id, { onDelete: "restrict" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+}, (table) => [
+  index("idx_products_store_status").on(table.storeId, table.status),
+  index("idx_products_category_status").on(table.categoryId, table.status),
+  index("idx_products_title").on(table.title),
+]);
+
+export const productAttributes = pgTable("product_attributes", {
+  productId: text("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  value: text("value").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [
+  primaryKey({ columns: [table.productId, table.key] }),
+  index("idx_product_attributes_key_value").on(table.key, table.value),
+]);
+
 // Refresh tokens are deliberately stored only as one-way hashes. A token can be
 // used once, then is replaced by a new token in the same family.
 export const refreshTokenSessions = pgTable("refresh_token_sessions", {

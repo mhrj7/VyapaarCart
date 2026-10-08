@@ -29,6 +29,13 @@
       "when": 1791470000000,
       "tag": "0003_jwt_refresh_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791471000000,
+      "tag": "0004_products_categories",
+      "breakpoints": true
     }
   ]
 }
