@@ -354,7 +354,7 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main className="min-h-screen">
       <div className="announcement">
         <span>Free delivery protection on eligible purchases</span>
         <button

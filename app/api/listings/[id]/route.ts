@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
-import { del } from "@vercel/blob";
 import { getDb } from "../../../../db";
 import { listings, users } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
-import { isListingImageUrl, requireListingOwner, routeError, serializeListing } from "../../../../lib/marketplace";
+import { requireListingOwner, routeError, serializeListing } from "../../../../lib/marketplace";
+import { deleteListingImage, isListingImageKey } from "../../../../lib/object-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +53,7 @@ export async function DELETE(request: Request, { params }: Context) {
     const listing = await requireListingOwner(db, id, identity.clerkId);
     if (!listing) return Response.json({ error: "You can only delete your own listing." }, { status: 403 });
     await db.delete(listings).where(eq(listings.id, id));
-    if (listing.imageKey && isListingImageUrl(listing.imageKey)) await del(listing.imageKey);
+    if (listing.imageKey && isListingImageKey(listing.imageKey)) await deleteListingImage(listing.imageKey);
     return Response.json({ ok: true });
   } catch (error) {
     return routeError(error);

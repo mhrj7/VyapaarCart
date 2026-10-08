@@ -1,6 +1,6 @@
-import { put } from "@vercel/blob";
 import { requireUser } from "../../../lib/auth";
 import { routeError } from "../../../lib/marketplace";
+import { uploadListingImage } from "../../../lib/object-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,9 @@ export async function POST(request: Request) {
     }
     const extension = image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : "jpg";
     const key = `listings/${identity.clerkId}/${crypto.randomUUID()}.${extension}`;
-    const blob = await put(key, image, { access: "public", contentType: image.type });
-    return Response.json({ imageKey: blob.url, imageUrl: blob.url }, { status: 201 });
+    const body = new Uint8Array(await image.arrayBuffer());
+    const stored = await uploadListingImage(key, body, image.type);
+    return Response.json({ imageKey: stored.key, imageUrl: stored.url }, { status: 201 });
   } catch (error) {
     return routeError(error);
   }

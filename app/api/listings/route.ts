@@ -4,10 +4,10 @@ import { listings, users } from "../../../db/schema";
 import { requireUser } from "../../../lib/auth";
 import {
   ensureUser,
-  isListingImageUrl,
   routeError,
   serializeListing,
 } from "../../../lib/marketplace";
+import { isListingImageKey } from "../../../lib/object-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (imageKey && !isListingImageUrl(imageKey, identity.clerkId)) {
+    if (imageKey && !isListingImageKey(imageKey, identity.clerkId)) {
       return Response.json(
         { error: "That image does not belong to your account." },
         { status: 403 },

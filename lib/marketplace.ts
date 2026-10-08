@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { getDb } from "../db";
 import { listings, users } from "../db/schema";
+import { isListingImageKey, publicImageUrl } from "./object-storage";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -13,20 +14,9 @@ export async function ensureUser(db: Db, clerkId: string) {
 
 export function imageUrl(imageKey: string | null) {
   if (!imageKey) return null;
-  return isListingImageUrl(imageKey)
-    ? imageKey
-    : `/api/images?key=${encodeURIComponent(imageKey)}`;
-}
-
-export function isListingImageUrl(value: string, clerkId?: string) {
-  try {
-    const url = new URL(value);
-    const validHost = url.protocol === "https:" && url.hostname.endsWith(".public.blob.vercel-storage.com");
-    const validPath = url.pathname.startsWith(`/listings/${clerkId ? `${clerkId}/` : ""}`);
-    return validHost && validPath;
-  } catch {
-    return false;
-  }
+  if (isListingImageKey(imageKey)) return publicImageUrl(imageKey);
+  // Existing Vercel Blob URLs remain readable while listing media is migrated.
+  return imageKey.startsWith("https://") ? imageKey : null;
 }
 
 export function serializeListing(row: typeof listings.$inferSelect, sellerName = "VyapaarCart seller") {

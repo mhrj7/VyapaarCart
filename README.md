@@ -14,7 +14,7 @@ VyapaarCart models the core workflow of a local marketplace such as OLX: a selle
 | --- | --- |
 | Identity | Clerk sign-in with the existing email/social configuration; protected write operations on the server |
 | Listings | Create, edit, archive, and delete seller-owned listings; search, category/city/price filters, and sorting |
-| Images | Validated JPG, PNG, and WebP uploads up to 5 MB; public objects stored in Vercel Blob and deleted with their listing |
+| Images | Validated JPG, PNG, and WebP uploads up to 5 MB; new listing media is stored through an S3-compatible object-storage adapter and deleted with its listing |
 | Marketplace | Favourites, buyer–seller conversations, seller dashboard, and shareable listing pages with metadata |
 | Orders | Buyer order requests, seller decision flow, order history, and persisted payment/shipping data |
 | Payments | Razorpay test-order creation and server-side HMAC signature verification |
@@ -30,7 +30,7 @@ flowchart LR
   W --> C[Clerk client]
   A --> C2[Clerk server authentication]
   A --> D[(Neon Postgres)]
-  A --> B[Vercel Blob]
+  A --> B[S3-compatible object storage]
   A --> R[Razorpay test API]
   A --> S[Local delivery simulator]
 
@@ -92,7 +92,7 @@ The database schema includes ownership relationships, cascading deletes, uniquen
 | Web + API | Next.js 16, React 19, TypeScript | One typed application for UI and server-side route handlers |
 | Authentication | Clerk | Managed sign-in and secure server-side identity checks |
 | Database | Neon Postgres + Drizzle ORM | Relational integrity with type-safe SQL access and migrations |
-| Object storage | Vercel Blob | Direct, validated listing-image storage without storing files in the database |
+| Object storage | S3-compatible API | Provider-independent listing-image storage; works with Cloudflare R2, AWS S3, MinIO, or another compatible provider |
 | Test payment | Razorpay | Realistic order creation and signature verification without live charges |
 | Hosting | Vercel | Server-rendered Next.js deployment with managed environment variables |
 
@@ -102,7 +102,7 @@ The database schema includes ownership relationships, cascading deletes, uniquen
 
 - Node.js 22 or newer
 - A Neon Postgres database
-- A Vercel Blob store
+- An S3-compatible bucket with public read access or a public delivery domain
 - A Clerk application
 - Razorpay test keys if testing checkout
 
@@ -124,7 +124,12 @@ Open `http://localhost:3000`.
 | Variable | Required for | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | Persistent marketplace data | Neon Postgres connection string |
-| `BLOB_READ_WRITE_TOKEN` | Listing-image upload and deletion | Vercel Blob token |
+| `S3_ENDPOINT` | Listing-image storage | S3-compatible API endpoint, such as a Cloudflare R2, AWS S3, or MinIO endpoint |
+| `S3_REGION` | Listing-image storage | Region; use the provider's documented value (`auto` for Cloudflare R2) |
+| `S3_ACCESS_KEY_ID` | Listing-image storage | Server-only access key |
+| `S3_SECRET_ACCESS_KEY` | Listing-image storage | Server-only secret key |
+| `S3_BUCKET` | Listing-image storage | Bucket name |
+| `S3_PUBLIC_BASE_URL` | Public listing images | Public bucket or CDN base URL, without a trailing slash |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Sign-in UI | Browser-safe Clerk key |
 | `CLERK_SECRET_KEY` | Protected API routes | Server-only Clerk key |
 | `RAZORPAY_TEST_KEY_ID` | Test checkout | Never use a live key in this project |
