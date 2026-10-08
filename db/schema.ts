@@ -12,6 +12,24 @@ export const users = pgTable("users", {
   createdAt: text("created_at").notNull().default(now),
 }, (table) => [uniqueIndex("idx_users_clerk_id").on(table.clerkId)]);
 
+export const organizations = pgTable("organizations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  ownerId: integer("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [uniqueIndex("idx_organizations_slug").on(table.slug), index("idx_organizations_owner_id").on(table.ownerId)]);
+
+export const organizationMembers = pgTable("organization_members", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("member"),
+  createdAt: text("created_at").notNull().default(now),
+}, (table) => [
+  primaryKey({ columns: [table.organizationId, table.userId] }),
+  index("idx_organization_members_user_id").on(table.userId),
+]);
+
 export const listings = pgTable("listings", {
   id: text("id").primaryKey(),
   sellerId: integer("seller_id").notNull().references(() => users.id, { onDelete: "cascade" }),
