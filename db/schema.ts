@@ -7,6 +7,8 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   clerkId: text("clerk_id").notNull(),
   displayName: text("display_name").notNull().default("VyapaarCart seller"),
+  role: text("role").notNull().default("buyer"),
+  staffForSellerId: integer("staff_for_seller_id"),
   createdAt: text("created_at").notNull().default(now),
 }, (table) => [uniqueIndex("idx_users_clerk_id").on(table.clerkId)]);
 

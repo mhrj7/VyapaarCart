@@ -8,6 +8,7 @@ import {
   serializeListing,
 } from "../../../lib/marketplace";
 import { isListingImageKey } from "../../../lib/object-storage";
+import { canManageSeller } from "../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -103,10 +104,16 @@ export async function POST(request: Request) {
     }
 
     const db = getDb();
-    const seller = await ensureUser(db, identity.clerkId);
+    let seller = await ensureUser(db, identity.clerkId);
+    if (seller.role === "buyer") {
+      [seller] = await db.update(users).set({ role: "seller" }).where(eq(users.id, seller.id)).returning();
+    }
+    if (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin") return Response.json({ error: "Only sellers can create listings." }, { status: 403 });
+    const sellerId = seller.role === "seller_staff" ? seller.staffForSellerId : seller.id;
+    if (!sellerId || !canManageSeller({ id: seller.id, clerkId: seller.clerkId, role: seller.role as "seller" | "seller_staff" | "admin", staffForSellerId: seller.staffForSellerId }, sellerId)) return Response.json({ error: "Seller assignment is required." }, { status: 403 });
     const listing = {
       id: crypto.randomUUID(),
-      sellerId: seller.id,
+      sellerId,
       title,
       description,
       category,

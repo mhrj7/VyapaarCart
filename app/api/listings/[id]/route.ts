@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { listings, users } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
-import { requireListingOwner, routeError, serializeListing } from "../../../../lib/marketplace";
+import { actorFor, requireListingOwner, routeError, serializeListing } from "../../../../lib/marketplace";
 import { deleteListingImage, isListingImageKey } from "../../../../lib/object-storage";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export async function PATCH(request: Request, { params }: Context) {
     if (!identity) return Response.json({ error: "Sign in to manage listings." }, { status: 401 });
     const { id } = await params;
     const db = getDb();
-    const listing = await requireListingOwner(db, id, identity.clerkId);
+    const listing = await requireListingOwner(db, id, await actorFor(db, identity.clerkId));
     if (!listing) return Response.json({ error: "You can only edit your own listing." }, { status: 403 });
     const payload = await request.json() as Record<string, unknown>;
     const values: Record<string, string | number> = { updatedAt: new Date().toISOString() };
@@ -50,7 +50,7 @@ export async function DELETE(request: Request, { params }: Context) {
     if (!identity) return Response.json({ error: "Sign in to manage listings." }, { status: 401 });
     const { id } = await params;
     const db = getDb();
-    const listing = await requireListingOwner(db, id, identity.clerkId);
+    const listing = await requireListingOwner(db, id, await actorFor(db, identity.clerkId));
     if (!listing) return Response.json({ error: "You can only delete your own listing." }, { status: 403 });
     await db.delete(listings).where(eq(listings.id, id));
     if (listing.imageKey && isListingImageKey(listing.imageKey)) await deleteListingImage(listing.imageKey);

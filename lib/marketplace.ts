@@ -2,14 +2,23 @@ import { and, eq } from "drizzle-orm";
 import type { getDb } from "../db";
 import { listings, users } from "../db/schema";
 import { isListingImageKey, publicImageUrl } from "./object-storage";
+import { canManageSeller, type Actor, isMarketplaceRole } from "./authorization";
 
 type Db = ReturnType<typeof getDb>;
 
 export async function ensureUser(db: Db, clerkId: string) {
-  await db.insert(users).values({ clerkId }).onConflictDoNothing();
+  const adminClerkIds = new Set((process.env.ADMIN_CLERK_IDS ?? "").split(",").map((id) => id.trim()).filter(Boolean));
+  await db.insert(users).values({ clerkId, role: adminClerkIds.has(clerkId) ? "admin" : "buyer" }).onConflictDoNothing();
+  if (adminClerkIds.has(clerkId)) await db.update(users).set({ role: "admin", staffForSellerId: null }).where(eq(users.clerkId, clerkId));
   const [user] = await db.select().from(users).where(eq(users.clerkId, clerkId)).limit(1);
   if (!user) throw new Error("Could not create marketplace profile.");
   return user;
+}
+
+export async function actorFor(db: Db, clerkId: string): Promise<Actor> {
+  const user = await ensureUser(db, clerkId);
+  if (!isMarketplaceRole(user.role)) throw new Error("User has an invalid marketplace role.");
+  return { id: user.id, clerkId: user.clerkId, role: user.role, staffForSellerId: user.staffForSellerId };
 }
 
 export function imageUrl(imageKey: string | null) {
@@ -23,14 +32,14 @@ export function serializeListing(row: typeof listings.$inferSelect, sellerName =
   return { ...row, sellerName, imageUrl: imageUrl(row.imageKey) };
 }
 
-export async function requireListingOwner(db: Db, listingId: string, clerkId: string) {
+export async function requireListingOwner(db: Db, listingId: string, actor: Actor) {
   const [row] = await db
     .select({ listing: listings, user: users })
     .from(listings)
     .innerJoin(users, eq(listings.sellerId, users.id))
-    .where(and(eq(listings.id, listingId), eq(users.clerkId, clerkId)))
+    .where(eq(listings.id, listingId))
     .limit(1);
-  return row?.listing ?? null;
+  return row && canManageSeller(actor, row.listing.sellerId) ? row.listing : null;
 }
 
 export function routeError(error: unknown) {
