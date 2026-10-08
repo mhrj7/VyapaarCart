@@ -1,5 +1,6 @@
 import { requireUser } from "../../../lib/auth";
-import { routeError } from "../../../lib/marketplace";
+import { actorFor, routeError } from "../../../lib/marketplace";
+import { getDb } from "../../../db";
 import { uploadListingImage } from "../../../lib/object-storage";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,8 @@ export async function POST(request: Request) {
   try {
     const identity = await requireUser(request);
     if (!identity) return Response.json({ error: "Sign in to upload an image." }, { status: 401 });
+    const actor = await actorFor(getDb(), identity.clerkId);
+    if (actor.role !== "seller" && actor.role !== "seller_staff" && actor.role !== "admin") return Response.json({ error: "Only seller accounts can upload listing images." }, { status: 403 });
     const form = await request.formData();
     const image = form.get("image");
     if (!(image instanceof File) || !allowedTypes.has(image.type) || image.size > maxBytes) {

@@ -2,7 +2,8 @@ import { desc, eq, or } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { listings, orders, sellerPickupProfiles, shipmentEvents, shipments } from "../../../db/schema";
 import { requireUser } from "../../../lib/auth";
-import { ensureUser, routeError } from "../../../lib/marketplace";
+import { actorFor, ensureUser, routeError } from "../../../lib/marketplace";
+import { canBuy, sellerAccountId } from "../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -11,14 +12,19 @@ export async function GET(request: Request) {
     const identity = await requireUser(request);
     if (!identity) return Response.json({ error: "Sign in to view orders." }, { status: 401 });
     const db = getDb();
+    if (!canBuy(await actorFor(db, identity.clerkId))) return Response.json({ error: "This account cannot create buyer orders." }, { status: 403 });
     const user = await ensureUser(db, identity.clerkId);
-    const [pickupProfile] = await db.select().from(sellerPickupProfiles).where(eq(sellerPickupProfiles.sellerId, user.id)).limit(1);
-    const rows = await db.select({ order: orders, listingTitle: listings.title, listingPrice: listings.price, listingCity: listings.city, shipment: shipments }).from(orders).innerJoin(listings, eq(orders.listingId, listings.id)).leftJoin(shipments, eq(shipments.orderId, orders.id)).where(or(eq(orders.buyerId, user.id), eq(orders.sellerId, user.id))).orderBy(desc(orders.createdAt));
+    const actor = await actorFor(db, identity.clerkId);
+    const sellerId = sellerAccountId(actor);
+    const [pickupProfile] = sellerId ? await db.select().from(sellerPickupProfiles).where(eq(sellerPickupProfiles.sellerId, sellerId)).limit(1) : [];
+    const scope = actor.role === "admin" ? undefined : or(eq(orders.buyerId, user.id), ...(sellerId ? [eq(orders.sellerId, sellerId)] : []));
+    const base = db.select({ order: orders, listingTitle: listings.title, listingPrice: listings.price, listingCity: listings.city, shipment: shipments }).from(orders).innerJoin(listings, eq(orders.listingId, listings.id)).leftJoin(shipments, eq(shipments.orderId, orders.id));
+    const rows = scope ? await base.where(scope).orderBy(desc(orders.createdAt)) : await base.orderBy(desc(orders.createdAt));
     const response = await Promise.all(rows.map(async (row) => ({
       ...row,
       role: row.order.buyerId === user.id ? "buyer" : "seller",
       deliveryConfigured: Boolean(row.order.shippingName && row.order.shippingEmail && row.order.shippingPhone && row.order.shippingAddress && row.order.shippingCity && row.order.shippingState && row.order.shippingPincode),
-      pickupConfigured: row.order.sellerId === user.id && Boolean(pickupProfile),
+      pickupConfigured: row.order.sellerId === sellerId && Boolean(pickupProfile),
       events: row.shipment ? await db.select().from(shipmentEvents).where(eq(shipmentEvents.shipmentId, row.shipment.id)).orderBy(desc(shipmentEvents.occurredAt)) : [],
     })));
     return Response.json({ orders: response });

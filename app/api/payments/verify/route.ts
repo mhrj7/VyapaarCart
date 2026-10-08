@@ -2,7 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { orders } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
-import { ensureUser, routeError } from "../../../../lib/marketplace";
+import { actorFor, ensureUser, routeError } from "../../../../lib/marketplace";
+import { canBuy } from "../../../../lib/authorization";
 import { verifyRazorpaySignature } from "../../../../lib/razorpay-signature";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
     const { marketplaceOrderId, razorpayOrderId, razorpayPaymentId, razorpaySignature } = await request.json() as Record<string, string | undefined>;
     if (!marketplaceOrderId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) return Response.json({ error: "Payment response is incomplete." }, { status: 400 });
     const db = getDb();
+    if (!canBuy(await actorFor(db, identity.clerkId))) return Response.json({ error: "This account cannot verify buyer payments." }, { status: 403 });
     const user = await ensureUser(db, identity.clerkId);
     const [order] = await db.select().from(orders).where(and(eq(orders.id, marketplaceOrderId), eq(orders.buyerId, user.id))).limit(1);
     if (!order || order.razorpayOrderId !== razorpayOrderId) return Response.json({ error: "Payment order does not match." }, { status: 400 });

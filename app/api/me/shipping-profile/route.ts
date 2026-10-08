@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { sellerPickupProfiles } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
-import { ensureUser, routeError } from "../../../../lib/marketplace";
+import { actorFor, routeError } from "../../../../lib/marketplace";
+import { sellerAccountId } from "../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 const required = ["contactName", "email", "phone", "address", "city", "state", "pincode"] as const;
@@ -17,8 +18,10 @@ export async function GET(request: Request) {
     const identity = await requireUser(request);
     if (!identity) return Response.json({ error: "Sign in to view shipping setup." }, { status: 401 });
     const db = getDb();
-    const seller = await ensureUser(db, identity.clerkId);
-    const [profile] = await db.select().from(sellerPickupProfiles).where(eq(sellerPickupProfiles.sellerId, seller.id)).limit(1);
+    const seller = await actorFor(db, identity.clerkId);
+    const sellerId = sellerAccountId(seller);
+    if (!sellerId || (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin")) return Response.json({ error: "Only seller accounts can manage shipping setup." }, { status: 403 });
+    const [profile] = await db.select().from(sellerPickupProfiles).where(eq(sellerPickupProfiles.sellerId, sellerId)).limit(1);
     return Response.json({ profile: profile || null });
   } catch (error) { return routeError(error); }
 }
@@ -30,9 +33,11 @@ export async function PUT(request: Request) {
     const input = await request.json() as Partial<Input>;
     if (!valid(input)) return Response.json({ error: "Enter a full address, a 6-digit pincode and a 10-digit phone number." }, { status: 400 });
     const db = getDb();
-    const seller = await ensureUser(db, identity.clerkId);
+    const seller = await actorFor(db, identity.clerkId);
+    const sellerId = sellerAccountId(seller);
+    if (!sellerId || (seller.role !== "seller" && seller.role !== "seller_staff" && seller.role !== "admin")) return Response.json({ error: "Only seller accounts can manage shipping setup." }, { status: 403 });
     const profile = {
-      sellerId: seller.id, pickupLocation: `vyapaarcart-${seller.id}`, contactName: input.contactName!.trim(), email: input.email!.trim(), phone: input.phone!.trim(),
+      sellerId, pickupLocation: `vyapaarcart-${sellerId}`, contactName: input.contactName!.trim(), email: input.email!.trim(), phone: input.phone!.trim(),
       address: input.address!.trim(), city: input.city!.trim(), state: input.state!.trim(), pincode: input.pincode!.trim(), country: "India", updatedAt: new Date().toISOString(),
     };
     await db.insert(sellerPickupProfiles).values(profile).onConflictDoUpdate({ target: sellerPickupProfiles.sellerId, set: profile });

@@ -2,7 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { listings, orders } from "../../../../db/schema";
 import { requireUser } from "../../../../lib/auth";
-import { ensureUser, routeError } from "../../../../lib/marketplace";
+import { actorFor, ensureUser, routeError } from "../../../../lib/marketplace";
+import { canBuy } from "../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
     const { marketplaceOrderId } = await request.json() as { marketplaceOrderId?: string };
     if (!marketplaceOrderId) return Response.json({ error: "Order is required." }, { status: 400 });
     const db = getDb();
+    if (!canBuy(await actorFor(db, identity.clerkId))) return Response.json({ error: "This account cannot pay for buyer orders." }, { status: 403 });
     const user = await ensureUser(db, identity.clerkId);
     const [record] = await db.select({ order: orders, price: listings.price, title: listings.title }).from(orders).innerJoin(listings, eq(orders.listingId, listings.id)).where(and(eq(orders.id, marketplaceOrderId), eq(orders.buyerId, user.id))).limit(1);
     if (!record) return Response.json({ error: "Order not found." }, { status: 404 });

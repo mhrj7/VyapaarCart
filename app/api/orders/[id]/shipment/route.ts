@@ -9,7 +9,8 @@ import {
 } from "../../../../../db/schema";
 import { requireUser } from "../../../../../lib/auth";
 import { trackingNumber } from "../../../../../lib/delivery";
-import { ensureUser, routeError } from "../../../../../lib/marketplace";
+import { actorFor, routeError } from "../../../../../lib/marketplace";
+import { canManageSeller, sellerAccountId } from "../../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -25,12 +26,14 @@ export async function POST(request: Request, { params }: Context) {
 
     const { id: orderId } = await params;
     const db = getDb();
-    const seller = await ensureUser(db, identity.clerkId);
+    const seller = await actorFor(db, identity.clerkId);
+    const sellerId = sellerAccountId(seller);
+    if (!sellerId || !canManageSeller(seller, sellerId)) return Response.json({ error: "Only seller accounts can create shipments." }, { status: 403 });
     const [record] = await db
       .select({ order: orders, listing: listings })
       .from(orders)
       .innerJoin(listings, eq(orders.listingId, listings.id))
-      .where(and(eq(orders.id, orderId), eq(orders.sellerId, seller.id)))
+      .where(and(eq(orders.id, orderId), eq(orders.sellerId, sellerId)))
       .limit(1);
     const order = record?.order;
     if (!order)
@@ -64,7 +67,7 @@ export async function POST(request: Request, { params }: Context) {
     const [pickup] = await db
       .select()
       .from(sellerPickupProfiles)
-      .where(eq(sellerPickupProfiles.sellerId, seller.id))
+      .where(eq(sellerPickupProfiles.sellerId, sellerId))
       .limit(1);
     if (!pickup)
       return Response.json(
