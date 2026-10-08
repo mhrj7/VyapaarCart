@@ -119,6 +119,16 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+### Docker Compose
+
+With Docker Desktop running, copy `.env.example` to `.env.local` and populate the Clerk development keys plus any integrations you want to exercise locally. `DATABASE_URL` is overridden inside Compose, so it always points at the local PostgreSQL service. Then start the local application and PostgreSQL database with:
+
+```bash
+docker compose up --build
+```
+
+The application is available at `http://localhost:3000`; the database schema is applied automatically to the local Postgres container. Stop the environment with `docker compose down`. Add `-v` only when you intentionally want to remove local database data.
+
 ### Environment variables
 
 | Variable | Required for | Notes |
