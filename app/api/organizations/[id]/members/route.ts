@@ -36,7 +36,7 @@ export async function POST(request: Request, { params }: Context) {
     if (!result) return Response.json({ error: "Organization not found." }, { status: 404 });
     const { email, role } = await request.json() as { email?: string; role?: string };
     const normalizedEmail = email?.trim().toLowerCase();
-    if (!normalizedEmail || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) return Response.json({ error: "Enter a valid teammate email address." }, { status: 400 });
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) return Response.json({ error: "Enter a valid teammate email address." }, { status: 400 });
     const memberRole = role === "manager" ? "manager" : "member";
     const client = await clerkClient();
     const found = await client.users.getUserList({ emailAddress: [normalizedEmail], limit: 1 });
