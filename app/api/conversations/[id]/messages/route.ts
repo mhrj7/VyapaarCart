@@ -2,7 +2,8 @@ import { asc, eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { conversations, messages } from "../../../../../db/schema";
 import { requireUser } from "../../../../../lib/auth";
-import { ensureUser, routeError } from "../../../../../lib/marketplace";
+import { actorFor, routeError } from "../../../../../lib/marketplace";
+import { canManageOwnRecord, canManageSeller } from "../../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -11,9 +12,9 @@ async function participant(request: Request, id: string) {
   const identity = await requireUser(request);
   if (!identity) return null;
   const db = getDb();
-  const user = await ensureUser(db, identity.clerkId);
+  const user = await actorFor(db, identity.clerkId);
   const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
-  if (!conversation || (conversation.buyerId !== user.id && conversation.sellerId !== user.id)) return null;
+  if (!conversation || (!canManageOwnRecord(user, conversation.buyerId) && !canManageSeller(user, conversation.sellerId))) return null;
   return { db, user, conversation };
 }
 

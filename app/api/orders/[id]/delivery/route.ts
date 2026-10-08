@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "../../../../../db";
 import { orders } from "../../../../../db/schema";
 import { requireUser } from "../../../../../lib/auth";
-import { ensureUser, routeError } from "../../../../../lib/marketplace";
+import { actorFor, routeError } from "../../../../../lib/marketplace";
+import { canManageOwnRecord } from "../../../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ id: string }> };
@@ -18,8 +19,10 @@ export async function PUT(request: Request, { params }: Context) {
     }
     const { id } = await params;
     const db = getDb();
-    const buyer = await ensureUser(db, identity.clerkId);
-    const [order] = await db.update(orders).set({ shippingName: input.name!.trim(), shippingEmail: input.email!.trim(), shippingPhone: input.phone!.trim(), shippingAddress: input.address!.trim(), shippingCity: input.city!.trim(), shippingState: input.state!.trim(), shippingPincode: input.pincode!.trim(), updatedAt: new Date().toISOString() }).where(and(eq(orders.id, id), eq(orders.buyerId, buyer.id))).returning();
+    const buyer = await actorFor(db, identity.clerkId);
+    const [existing] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+    if (!existing || !canManageOwnRecord(buyer, existing.buyerId)) return Response.json({ error: "Order not found." }, { status: 404 });
+    const [order] = await db.update(orders).set({ shippingName: input.name!.trim(), shippingEmail: input.email!.trim(), shippingPhone: input.phone!.trim(), shippingAddress: input.address!.trim(), shippingCity: input.city!.trim(), shippingState: input.state!.trim(), shippingPincode: input.pincode!.trim(), updatedAt: new Date().toISOString() }).where(eq(orders.id, id)).returning();
     if (!order) return Response.json({ error: "Order not found." }, { status: 404 });
     return Response.json({ order });
   } catch (error) { return routeError(error); }

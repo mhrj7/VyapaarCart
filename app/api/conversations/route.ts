@@ -3,7 +3,7 @@ import { getDb } from "../../../db";
 import { conversations, listings } from "../../../db/schema";
 import { requireUser } from "../../../lib/auth";
 import { actorFor, ensureUser, routeError } from "../../../lib/marketplace";
-import { canBuy } from "../../../lib/authorization";
+import { canBuy, sellerAccountId } from "../../../lib/authorization";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,11 @@ export async function GET(request: Request) {
     const db = getDb();
     if (!canBuy(await actorFor(db, identity.clerkId))) return Response.json({ error: "This account cannot start buyer conversations." }, { status: 403 });
     const user = await ensureUser(db, identity.clerkId);
-    const rows = await db.select({ conversation: conversations, listingTitle: listings.title }).from(conversations).innerJoin(listings, eq(conversations.listingId, listings.id)).where(or(eq(conversations.buyerId, user.id), eq(conversations.sellerId, user.id))).orderBy(desc(conversations.createdAt));
+    const actor = await actorFor(db, identity.clerkId);
+    const sellerId = sellerAccountId(actor);
+    const scope = actor.role === "admin" ? undefined : or(eq(conversations.buyerId, user.id), ...(sellerId ? [eq(conversations.sellerId, sellerId)] : []));
+    const base = db.select({ conversation: conversations, listingTitle: listings.title }).from(conversations).innerJoin(listings, eq(conversations.listingId, listings.id));
+    const rows = scope ? await base.where(scope).orderBy(desc(conversations.createdAt)) : await base.orderBy(desc(conversations.createdAt));
     return Response.json({ conversations: rows });
   } catch (error) {
     return routeError(error);

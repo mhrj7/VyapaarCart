@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { getDb } from "../db";
 import { listings, users } from "../db/schema";
 import { isListingImageKey, publicImageUrl } from "./object-storage";
