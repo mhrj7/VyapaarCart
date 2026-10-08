@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Show, SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 
 type Listing = {
@@ -366,6 +367,7 @@ export default function Home() {
         </button>
       </div>
       <header className="site-header">
+        <Link href="/products" aria-label="Browse product catalog">Products</Link>
         <button
           className="brand"
           aria-label="VyapaarCart home"

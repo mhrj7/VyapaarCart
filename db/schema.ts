@@ -70,6 +70,8 @@ export const products = pgTable("products", {
   index("idx_products_store_status").on(table.storeId, table.status),
   index("idx_products_category_status").on(table.categoryId, table.status),
   index("idx_products_title").on(table.title),
+  index("idx_products_search").using("gin", sql`(setweight(to_tsvector('english', ${table.title}), 'A') || setweight(to_tsvector('english', ${table.description}), 'B'))`),
+  index("idx_products_browse").on(table.status, table.createdAt, table.id),
 ]);
 
 export const productImages = pgTable("product_images", {
