@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next",
+    "test": "tsx --test tests/**/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push"
   },
@@ -36,6 +37,7 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "globals": "16.4.0",
     "tailwindcss": "4.2.1",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.3"
   },
