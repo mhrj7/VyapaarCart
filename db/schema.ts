@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgTable, primaryKey, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, primaryKey, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 const now = sql`CURRENT_TIMESTAMP::text`;
 
@@ -25,6 +25,29 @@ export const sellerApprovalAudits = pgTable("seller_approval_audits", {
   nextStatus: text("next_status").notNull(),
   createdAt: text("created_at").notNull().default(now),
 }, (table) => [index("idx_seller_approval_audits_seller_created_at").on(table.sellerId, table.createdAt)]);
+
+export const stores = pgTable("stores", {
+  id: text("id").primaryKey(),
+  ownerId: integer("owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  description: text("description").notNull(),
+  city: text("city").notNull(),
+  isPublic: boolean("is_public").notNull().default(true),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+}, (table) => [uniqueIndex("idx_stores_slug").on(table.slug), index("idx_stores_owner_id").on(table.ownerId)]);
+
+export const storeProducts = pgTable("store_products", {
+  id: text("id").primaryKey(),
+  storeId: text("store_id").notNull().references(() => stores.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: text("created_at").notNull().default(now),
+  updatedAt: text("updated_at").notNull().default(now),
+}, (table) => [index("idx_store_products_store_status").on(table.storeId, table.status)]);
 
 export const organizations = pgTable("organizations", {
   id: text("id").primaryKey(),
