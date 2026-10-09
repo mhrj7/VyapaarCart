@@ -17,7 +17,7 @@ services:
     build:
       context: .
       target: development
-    command: sh -c "npm run db:push && npm run dev"
+    command: sh -c 'npm run db:push && DATABASE_URL_UNPOOLED=$$DATABASE_URL node scripts/migrate-inventory-reservations.mjs && npm run dev'
     ports:
       - "3000:3000"
     env_file:

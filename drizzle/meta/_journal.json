@@ -71,6 +71,7 @@
       "when": 1791476000000,
       "tag": "0009_inventory_audits",
       "breakpoints": true
-    }
+    },
+    { "idx": 10, "version": "7", "when": 1791477000000, "tag": "0010_inventory_reservations", "breakpoints": true }
   ]
 }

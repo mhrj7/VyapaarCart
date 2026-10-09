@@ -16,6 +16,7 @@ test("warehouse SQL: separate SKU/location balances, seller isolation, persisten
   try {
     await db.execute(sql.raw(await readFile(new URL("../drizzle/0008_warehouses.sql", import.meta.url), "utf8")));
     await db.execute(sql.raw(await readFile(new URL("../drizzle/0009_inventory_audits.sql", import.meta.url), "utf8")));
+    await db.execute(sql.raw(await readFile(new URL("../drizzle/0010_inventory_reservations.sql", import.meta.url), "utf8")));
     for (let i = 0; i < 2; i++) {
       const [u] = await db.insert(users).values({ clerkId: `${tag}-${i}`, role: "seller", sellerApprovalStatus: "approved" }).returning(); ownerIds.push(u.id);
       await db.insert(stores).values({ id: storeIds[i], ownerId: u.id, name: "Local warehouse test", slug: `${tag}-${i}`, city: "Test", description: "Local test" });

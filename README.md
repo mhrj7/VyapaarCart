@@ -165,8 +165,7 @@ No performance or load-test figures are claimed because they have not yet been m
 
 This repository **does not yet claim** to be the complete multi-vendor commerce platform described in the original roadmap. In particular, it does not yet include:
 
-- Carts or multi-warehouse inventory
-- Concurrent inventory reservation, idempotency keys, automatic stock release, or a true oversell-prevention test
+- Carts, multi-SKU checkout, or finalization of SKU reservations into paid orders
 - Disputes, refunds, or commission accounting
 - Redis rate limiting, Kafka/Redpanda, transactional outbox, email notifications, or OpenTelemetry/Prometheus/Grafana
 - Webhook endpoints, HMAC-signed webhook deliveries, retry queues, delivery console, secret rotation, replay, or endpoint-level rate limits
@@ -184,7 +183,39 @@ flowchart LR
   E --> F[Observability, load tests and CI]
 ```
 
-The next highest-value milestone is **inventory reservations with idempotent checkout**. It creates a concrete concurrency problem to solve, makes the data model closer to a true marketplace, and provides the event source needed to build a separate webhook product later.
+### M‑22: SKU checkout reservations
+
+Store variant → **Start checkout** → choose quantity → sign in → reserve for 10 minutes. This is a stock-hold stage, not a payment or confirmed order. The older listing/Razorpay flow is separate and unchanged.
+
+```mermaid
+sequenceDiagram
+  participant B as Buyer checkout
+  participant A as Authenticated API
+  participant D as PostgreSQL
+  B->>A: SKU, quantity, idempotency key
+  A->>D: reserve_inventory (single atomic call)
+  D->>D: Lock request key, then SKU
+  D->>D: Recheck active holds and physical stock
+  D->>D: Allocate across warehouses; expiry = DB clock + 10 min
+  D-->>A: Reservation ID (or insufficient stock)
+  A-->>B: Owner-only hold summary + server time
+  Note over D: Available = physical stock minus unexpired allocations
+  Note over B,D: Expired holds stop counting without a release worker
+```
+
+- Idempotent retries return the same reservation, including after expiry; they never extend the deadline. A changed payload with the same key is rejected. One active checkout per buyer/SKU limits accidental duplicate holds.
+- Creation is serialized per SKU in a volatile database function. Fresh statements after the lock avoid stale pre-lock snapshots. Concurrent buyers cannot allocate the same remaining stock.
+- Physical quantities are unchanged. A database trigger prevents seller updates below active allocated stock, atomically preserving the M‑21 audit behavior.
+- Availability is public and does not expose warehouse addresses or buyer records. Reservation details are owner-only. Admin/staff checkout, own-store checkout, hidden/inactive SKUs and non-approved sellers are rejected (admin-owned public test stores remain eligible).
+- No payment capture, stock deduction, cancellation or order finalization is claimed. Expired records remain for history; availability ignores them using database time, not a client timer or cron.
+- Local integration evidence: holds spanning warehouses, concurrent last-stock requests, concurrent duplicate retries, owner isolation, server-owned price, stock-update rollback, actual timed expiry and no double release. Live signed-in verification is still pending; do not mark M‑22 completed until it passes.
+
+```bash
+# Local fixtures only; refuses a non-local DATABASE_URL
+docker compose exec -T app sh -c 'RUN_RESERVATION_INTEGRATION=1 npx tsx --test tests/reservations.integration.test.ts'
+# Fresh environments need both Drizzle tables and this function/trigger migration
+node --env-file=.env.local scripts/migrate-inventory-reservations.mjs
+```
 
 ## Resume-safe project description
 
@@ -192,7 +223,7 @@ Use this now:
 
 > Built and deployed VyapaarCart, a full-stack local marketplace using Next.js, TypeScript, Neon Postgres, Drizzle, Clerk, S3-compatible storage, and Razorpay test mode. Implemented authenticated listing management, public seller stores, categorized products and SKU variants, ordered product galleries, buyer–seller messaging, payment signature verification, and a persisted simulated shipment-tracking workflow.
 
-Do **not** yet claim Kafka, Redis, FastAPI, inventory reservations, real courier integration, webhooks, or measured scale. Add those only after they are genuinely implemented and tested.
+Do **not** yet claim Kafka, Redis, FastAPI, paid SKU checkout, real courier integration, webhooks, or measured scale. Reservation implementation has local concurrency tests; its live verification is pending. Add new claims only after they are genuinely implemented and tested.
 
 ## Licence
 

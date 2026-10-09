@@ -44,6 +44,11 @@ export async function requireListingOwner(db: Db, listingId: string, actor: Acto
 }
 
 export function routeError(error: unknown) {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+    if ("code" in current && current.code === "P0022") return Response.json({ error: "Stock cannot be lower than active checkout holds. Wait for expiry, then reload inventory." }, { status: 409 });
+    current = "cause" in current ? current.cause : null;
+  }
   const message = error instanceof Error ? error.message : "Unexpected error";
   if (message.includes("no such table")) {
     return Response.json({ error: "Marketplace storage is being prepared. Please try again shortly." }, { status: 503 });

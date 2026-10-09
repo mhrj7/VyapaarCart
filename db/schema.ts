@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, serial, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 const now = sql`CURRENT_TIMESTAMP::text`;
 
@@ -149,6 +149,24 @@ export const inventoryAudits = pgTable("inventory_audits", {
   reason: text("reason").notNull(),
   createdAt: text("created_at").notNull().default(now),
 }, (t) => [index("idx_inventory_audits_warehouse_created").on(t.warehouseId, t.createdAt), uniqueIndex("idx_inventory_audits_stock_version").on(t.warehouseId, t.variantId, t.stockVersion)]);
+
+export const inventoryReservations = pgTable("inventory_reservations", {
+  id: text("id").primaryKey(),
+  buyerId: integer("buyer_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  variantId: text("variant_id").notNull().references(() => productVariants.id, { onDelete: "restrict" }),
+  quantity: integer("quantity").notNull(),
+  unitPrice: integer("unit_price").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, t => [uniqueIndex("inventory_reservations_buyer_id_idempotency_key_key").on(t.buyerId, t.idempotencyKey), index("idx_reservations_variant_expiry").on(t.variantId, t.expiresAt), check("inventory_reservations_quantity_check", sql`${t.quantity} BETWEEN 1 AND 20`), check("inventory_reservations_unit_price_check", sql`${t.unitPrice} > 0`), check("inventory_reservations_check", sql`${t.expiresAt} > ${t.createdAt}`)]);
+
+export const inventoryReservationAllocations = pgTable("inventory_reservation_allocations", {
+  reservationId: text("reservation_id").notNull().references(() => inventoryReservations.id, { onDelete: "cascade" }),
+  warehouseId: text("warehouse_id").notNull(),
+  variantId: text("variant_id").notNull(),
+  quantity: integer("quantity").notNull(),
+}, t => [primaryKey({ columns: [t.reservationId, t.warehouseId] }), foreignKey({ columns: [t.warehouseId, t.variantId], foreignColumns: [warehouseStock.warehouseId, warehouseStock.variantId] }).onDelete("restrict"), index("idx_reservation_allocations_stock").on(t.variantId, t.warehouseId), check("inventory_reservation_allocations_quantity_check", sql`${t.quantity} > 0`)]);
 
 export const productVariantAttributes = pgTable("product_variant_attributes", {
   variantId: text("variant_id").notNull().references(() => productVariants.id, { onDelete: "cascade" }),
