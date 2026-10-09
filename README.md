@@ -208,7 +208,8 @@ sequenceDiagram
 - Physical quantities are unchanged. A database trigger prevents seller updates below active allocated stock, atomically preserving the M‑21 audit behavior.
 - Availability is public and does not expose warehouse addresses or buyer records. Reservation details are owner-only. Admin/staff checkout, own-store checkout, hidden/inactive SKUs and non-approved sellers are rejected (admin-owned public test stores remain eligible).
 - No payment capture, stock deduction, cancellation or order finalization is claimed. Expired records remain for history; availability ignores them using database time, not a client timer or cron.
-- Local integration evidence: holds spanning warehouses, concurrent last-stock requests, concurrent duplicate retries, owner isolation, server-owned price, stock-update rollback, actual timed expiry and no double release. Live signed-in verification is still pending; do not mark M‑22 completed until it passes.
+- Local integration evidence: holds spanning warehouses, concurrent last-stock requests, concurrent duplicate retries, owner isolation, server-owned price, stock-update rollback, actual timed expiry and no double release.
+- Live M‑22 verification (9 October 2026): a signed-in buyer reserved one M17-BLACK-128 unit. Availability decreased from 17 to 16 and the same reservation survived page reload. Its database deadline was exactly 10 minutes after creation (11:47:16–11:57:16 IST). After natural expiry, the live page displayed “Reservation expired” and availability returned to 17. A read-only database check confirmed the expired record retained one allocation and physical stock remained 17. No payment, shipment, manual expiry edit or release job was involved. M‑22 is completed; this does not claim paid SKU-order finalization or completion of later milestones.
 
 ```bash
 # Local fixtures only; refuses a non-local DATABASE_URL
@@ -223,7 +224,7 @@ Use this now:
 
 > Built and deployed VyapaarCart, a full-stack local marketplace using Next.js, TypeScript, Neon Postgres, Drizzle, Clerk, S3-compatible storage, and Razorpay test mode. Implemented authenticated listing management, public seller stores, categorized products and SKU variants, ordered product galleries, buyer–seller messaging, payment signature verification, and a persisted simulated shipment-tracking workflow.
 
-Do **not** yet claim Kafka, Redis, FastAPI, paid SKU checkout, real courier integration, webhooks, or measured scale. Reservation implementation has local concurrency tests; its live verification is pending. Add new claims only after they are genuinely implemented and tested.
+Do **not** yet claim Kafka, Redis, FastAPI, paid SKU checkout, real courier integration, webhooks, or measured scale. Expiring SKU stock reservations have local concurrency tests and a verified live buyer hold/expiry flow. Add new claims only after they are genuinely implemented and tested.
 
 ## Licence
 
