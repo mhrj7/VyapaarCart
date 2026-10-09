@@ -19,6 +19,7 @@ VyapaarCart models the core workflow of a local marketplace such as OLX: a selle
 | Seller catalog | Approved sellers and assigned staff can manage public stores, categorized products, searchable attributes, and variants with unique SKUs and prices |
 | Product search | Public `/products` catalog with indexed title/description relevance, category and seller filters, SQL attribute filtering and bounded pagination. [Design and tests](docs/product-search.md) |
 | Warehouses | Seller-only warehouse management and separate per-SKU/location stock, with version-checked updates. Checkout reservations are not implemented by this milestone. [Design and tests](docs/warehouses.md) |
+| Inventory audit | Authorized stock edits record actor, reason, previous/new quantities and version atomically with stock. Latest 100 changes are visible per warehouse. [Contract and failure tests](docs/warehouses.md#stock-audit-contract-m-21) |
 | Marketplace | Favourites, buyer–seller conversations, seller dashboard, and shareable listing pages with metadata |
 | Orders | Buyer order requests, seller decision flow, order history, and persisted payment/shipping data |
 | Payments | Razorpay test-order creation and server-side HMAC signature verification |

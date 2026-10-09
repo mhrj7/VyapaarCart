@@ -9,8 +9,10 @@ export function warehouseInput(value: unknown) {
 export function stockInput(value: unknown) {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
+  const reason = v.reason === undefined ? "Manual stock update" : typeof v.reason === "string" ? v.reason.trim() : "";
+  if (!reason || reason.length > 240) return null;
   return typeof v.variantId === "string" && v.variantId.length > 0 && v.variantId.length <= 100 &&
     Number.isSafeInteger(v.quantity) && Number(v.quantity) >= 0 && Number(v.quantity) <= 1000000 &&
     Number.isSafeInteger(v.version) && Number(v.version) >= 0 && Number(v.version) < 2147483647
-    ? { variantId: v.variantId, quantity: Number(v.quantity), version: Number(v.version) } : null;
+    ? { variantId: v.variantId, quantity: Number(v.quantity), version: Number(v.version), reason } : null;
 }

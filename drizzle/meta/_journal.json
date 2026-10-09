@@ -64,6 +64,13 @@
       "when": 1791475000000,
       "tag": "0008_warehouses",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791476000000,
+      "tag": "0009_inventory_audits",
+      "breakpoints": true
     }
   ]
 }

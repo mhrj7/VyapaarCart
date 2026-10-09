@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import { getDb } from "../db";
-import { categories, products, productVariants, stores, users, warehouses, warehouseStock } from "../db/schema";
+import { categories, inventoryAudits, products, productVariants, stores, users, warehouses, warehouseStock } from "../db/schema";
 import { Actor } from "../lib/authorization";
 import { accessibleStore, setWarehouseStock, warehouseInventory } from "../lib/warehouse-service";
 
@@ -15,6 +15,7 @@ test("warehouse SQL: separate SKU/location balances, seller isolation, persisten
   const variantIds = [crypto.randomUUID(), crypto.randomUUID()]; const productIds = [crypto.randomUUID(), crypto.randomUUID()];
   try {
     await db.execute(sql.raw(await readFile(new URL("../drizzle/0008_warehouses.sql", import.meta.url), "utf8")));
+    await db.execute(sql.raw(await readFile(new URL("../drizzle/0009_inventory_audits.sql", import.meta.url), "utf8")));
     for (let i = 0; i < 2; i++) {
       const [u] = await db.insert(users).values({ clerkId: `${tag}-${i}`, role: "seller", sellerApprovalStatus: "approved" }).returning(); ownerIds.push(u.id);
       await db.insert(stores).values({ id: storeIds[i], ownerId: u.id, name: "Local warehouse test", slug: `${tag}-${i}`, city: "Test", description: "Local test" });
@@ -36,6 +37,8 @@ test("warehouse SQL: separate SKU/location balances, seller isolation, persisten
     await setWarehouseStock(actor, storeIds[0], warehouseIds[1], { variantId: variantIds[0], quantity: 7, version: 0 });
     assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.inventory[0].quantity, 10);
     assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[1]))?.inventory[0].quantity, 7);
+    assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.history[0].previousQuantity, 0);
+    assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.history[0].quantity, 10);
     const attempts = await Promise.all([12, 14].map(quantity => setWarehouseStock(actor, storeIds[0], warehouseIds[0], { variantId: variantIds[0], quantity, version: 1 })));
     assert.equal(attempts.filter(x => x === "conflict").length, 1);
     assert.equal(attempts.filter(x => typeof x === "object").length, 1);
@@ -44,10 +47,25 @@ test("warehouse SQL: separate SKU/location balances, seller isolation, persisten
     assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.inventory[0].quantity, 0);
     assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[1]))?.inventory[0].quantity, 7);
     await assert.rejects(db.update(warehouseStock).set({ quantity: -1 }).where(eq(warehouseStock.warehouseId, warehouseIds[0])));
+    const records = await db.select().from(inventoryAudits).where(eq(inventoryAudits.storeId, storeIds[0]));
+    assert.equal(records.length, 4, "Rejected/stale writes create no audit records");
+    assert.ok(records.every(a => a.actorId === actor.id && a.actorRole === "seller" && a.sku === `${tag}-0`));
+    const zero = records.find(a => a.stockVersion === 3);
+    assert.ok(zero && [12, 14].includes(zero.previousQuantity) && zero.quantity === 0);
+    await assert.rejects(setWarehouseStock(actor, storeIds[0], warehouseIds[0], { variantId: variantIds[0], quantity: 99, version: 3, reason: "" }));
+    assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.inventory[0].quantity, 0, "Audit failure rolls back stock");
+    assert.equal((await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.history.length, 3);
+    const [staffUser] = await db.insert(users).values({ clerkId: `${tag}-staff`, role: "seller_staff", staffForSellerId: ownerIds[0], sellerApprovalStatus: "approved" }).returning();
+    ownerIds.push(staffUser.id);
+    const writeStaff: Actor = { ...actor, id: staffUser.id, clerkId: staffUser.clerkId, role: "seller_staff", staffForSellerId: actor.id };
+    await setWarehouseStock(writeStaff, storeIds[0], warehouseIds[0], { variantId: variantIds[0], quantity: 5, version: 3, reason: "Stock count correction" });
+    const staffAudit = (await warehouseInventory(actor, storeIds[0], warehouseIds[0]))?.history[0];
+    assert.equal(staffAudit?.actorId, staffUser.id); assert.equal(staffAudit?.actorRole, "seller_staff"); assert.equal(staffAudit?.reason, "Stock count correction");
     const staff: Actor = { ...actor, id: -1, role: "seller_staff", staffForSellerId: ownerIds[0] };
     assert.ok(await accessibleStore(staff, storeIds[0]));
     assert.equal(await accessibleStore({ ...actor, sellerApprovalStatus: "pending" }, storeIds[0]), null);
   } finally {
+    await db.delete(inventoryAudits).where(inArray(inventoryAudits.storeId, storeIds));
     await db.delete(warehouseStock).where(inArray(warehouseStock.warehouseId, warehouseIds));
     await db.delete(warehouses).where(inArray(warehouses.id, warehouseIds));
     await db.delete(products).where(inArray(products.id, productIds));

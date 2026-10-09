@@ -5,18 +5,21 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 
 type Warehouse = { id: string; name: string; address: string; city: string; postcode: string };
 type Stock = { variantId: string; sku: string; name: string; title: string; quantity: number; version: number };
+type Audit = { id: string; sku: string; previousQuantity: number; quantity: number; stockVersion: number; actorId: number; actorRole: string; reason: string; createdAt: string };
 type Requester = (path: string, init?: RequestInit) => Promise<Response>;
 const empty = { name: "", address: "", city: "", postcode: "" };
 
-function StockEditor({ row, save, busy }: { row: Stock; save: (row: Stock, quantity: number) => Promise<void>; busy: boolean }) {
+function StockEditor({ row, save, busy }: { row: Stock; save: (row: Stock, quantity: number, reason: string) => Promise<void>; busy: boolean }) {
   const [quantity, setQuantity] = useState(String(row.quantity));
-  return <tr><td>{row.title}<br /><small>{row.name}</small></td><td>{row.sku}</td><td>{row.quantity}</td><td><form onSubmit={(e) => { e.preventDefault(); void save(row, Number(quantity)); }}><label className="sr-only" htmlFor={`stock-${row.variantId}`}>Quantity for {row.sku}</label><input id={`stock-${row.variantId}`} aria-label={`Quantity for ${row.sku}`} type="number" min="0" max="1000000" step="1" required value={quantity} onChange={(e) => setQuantity(e.target.value)} /><button disabled={busy} aria-label={`Save stock for ${row.sku}`}>Save</button></form></td></tr>;
+  const [reason, setReason] = useState("");
+  return <tr><td>{row.title}<br /><small>{row.name}</small></td><td>{row.sku}</td><td>{row.quantity}</td><td><form onSubmit={(e) => { e.preventDefault(); void save(row, Number(quantity), reason); }}><label className="sr-only" htmlFor={`stock-${row.variantId}`}>Quantity for {row.sku}</label><input id={`stock-${row.variantId}`} aria-label={`Quantity for ${row.sku}`} type="number" min="0" max="1000000" step="1" required value={quantity} onChange={(e) => setQuantity(e.target.value)} /><input aria-label={`Reason for ${row.sku}`} placeholder="Reason for change" required maxLength={240} value={reason} onChange={(e) => setReason(e.target.value)} /><button disabled={busy} aria-label={`Save stock for ${row.sku}`}>Save</button></form></td></tr>;
 }
 
 function WarehouseManager({ storeId, request }: { storeId: string; request: Requester }) {
   const [items, setItems] = useState<Warehouse[]>([]);
   const [active, setActive] = useState("");
   const [inventory, setInventory] = useState<Stock[]>([]);
+  const [history, setHistory] = useState<Audit[]>([]);
   const [draft, setDraft] = useState(empty);
   const [edit, setEdit] = useState(empty);
   const [busy, setBusy] = useState(false);
@@ -36,10 +39,10 @@ function WarehouseManager({ storeId, request }: { storeId: string; request: Requ
   })(); return () => { stopped = true; }; }, [base, request]);
   const reloadStock = useCallback(async () => {
     const r = await request(`${base}/${active}`); const data = await r.json();
-    if (!r.ok) throw Error(data.error); setInventory(data.inventory); setEdit(data.warehouse);
+    if (!r.ok) throw Error(data.error); setInventory(data.inventory); setHistory(data.history); setEdit(data.warehouse);
   }, [active, base, request]);
   useEffect(() => { if (!active) return; let stopped = false; setInventory([]); setLoading(true);
-    void (async () => { try { const r = await request(`${base}/${active}`); const data = await r.json(); if (stopped) return; if (!r.ok) throw Error(data.error); setInventory(data.inventory); setEdit(data.warehouse);
+    void (async () => { try { const r = await request(`${base}/${active}`); const data = await r.json(); if (stopped) return; if (!r.ok) throw Error(data.error); setInventory(data.inventory); setHistory(data.history); setEdit(data.warehouse);
     } catch (error) { if (!stopped) setNotice(error instanceof Error ? error.message : "Could not load inventory."); } finally { if (!stopped) setLoading(false); } })();
     return () => { stopped = true; };
   }, [active, base, request]);
@@ -58,7 +61,9 @@ function WarehouseManager({ storeId, request }: { storeId: string; request: Requ
         {active && !loading && <form key={active} onSubmit={(e) => { e.preventDefault(); void mutate(`${base}/${active}`, "PATCH", edit, "Warehouse details saved."); }}>{fields(edit, setEdit)}<button disabled={busy}>Save warehouse details</button></form>}</section></div>
     <p role="status">{loading ? "Loading inventory…" : notice}</p>
     {active && !loading && <section className="inventory"><h2>Inventory at {items.find((w) => w.id === active)?.name}</h2><p>Each SKU has its own stock count at this warehouse. A SKU not yet recorded starts at zero. This does not reserve stock during checkout.</p>
-      {inventory.length === 0 ? <p>Add product variants in your store to track stock here.</p> : <div className="table-scroll"><table><thead><tr><th>Product / variant</th><th>SKU</th><th>Recorded stock</th><th>Set quantity</th></tr></thead><tbody>{inventory.map((row) => <StockEditor key={`${active}:${row.variantId}:${row.version}`} row={row} busy={busy} save={async (r, quantity) => { await mutate(`${base}/${active}`, "PUT", { variantId: r.variantId, quantity, version: r.version }, "Stock saved."); }} />)}</tbody></table></div>}</section>}
+      {inventory.length === 0 ? <p>Add product variants in your store to track stock here.</p> : <div className="table-scroll"><table><thead><tr><th>Product / variant</th><th>SKU</th><th>Recorded stock</th><th>Set quantity</th></tr></thead><tbody>{inventory.map((row) => <StockEditor key={`${active}:${row.variantId}:${row.version}`} row={row} busy={busy} save={async (r, quantity, reason) => { await mutate(`${base}/${active}`, "PUT", { variantId: r.variantId, quantity, version: r.version, reason }, "Stock saved and audit recorded."); }} />)}</tbody></table></div>}
+      <h2>Stock change history</h2><p>Latest 100 recorded changes at this warehouse. Earlier stock predates audit logging and is not backfilled.</p>
+      {!history.length ? <p>No recorded changes yet.</p> : <div className="table-scroll"><table><thead><tr><th>When</th><th>SKU</th><th>Before</th><th>After</th><th>Change</th><th>Actor</th><th>Reason</th><th>Version</th></tr></thead><tbody>{history.map(a => <tr key={a.id}><td>{new Date(a.createdAt).toLocaleString()}</td><td>{a.sku}</td><td>{a.previousQuantity}</td><td>{a.quantity}</td><td>{a.quantity - a.previousQuantity}</td><td>{a.actorRole} #{a.actorId}</td><td>{a.reason}</td><td>{a.stockVersion}</td></tr>)}</tbody></table></div>}</section>}
   </>;
 }
 

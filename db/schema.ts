@@ -135,6 +135,21 @@ export const warehouseStock = pgTable("warehouse_stock", {
   updatedAt: text("updated_at").notNull().default(now),
 }, (t) => [primaryKey({ columns: [t.warehouseId, t.variantId] }), index("idx_warehouse_stock_variant").on(t.variantId), check("warehouse_stock_quantity_check", sql`${t.quantity} >= 0 AND ${t.quantity} <= 1000000`)]);
 
+export const inventoryAudits = pgTable("inventory_audits", {
+  id: text("id").primaryKey(),
+  storeId: text("store_id").notNull().references(() => stores.id, { onDelete: "restrict" }),
+  warehouseId: text("warehouse_id").notNull().references(() => warehouses.id, { onDelete: "restrict" }),
+  variantId: text("variant_id").notNull().references(() => productVariants.id, { onDelete: "restrict" }),
+  actorId: integer("actor_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  actorRole: text("actor_role").notNull(),
+  sku: text("sku").notNull(),
+  previousQuantity: integer("previous_quantity").notNull(),
+  quantity: integer("quantity").notNull(),
+  stockVersion: integer("stock_version").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: text("created_at").notNull().default(now),
+}, (t) => [index("idx_inventory_audits_warehouse_created").on(t.warehouseId, t.createdAt), uniqueIndex("idx_inventory_audits_stock_version").on(t.warehouseId, t.variantId, t.stockVersion)]);
+
 export const productVariantAttributes = pgTable("product_variant_attributes", {
   variantId: text("variant_id").notNull().references(() => productVariants.id, { onDelete: "cascade" }),
   key: text("key").notNull(),
