@@ -28,7 +28,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   return <main className="catalog-page">
     <header><Link href="/">← Marketplace</Link><b>VyapaarCart</b></header>
     <section><p className="eyebrow">PUBLIC PRODUCT CATALOG</p><h1>Find your next good thing.</h1><p>Search product titles and descriptions. Filter by category and seller.</p>
-      <form action="/products" className="catalog-filters">
+      <form key={`${input.q}:${input.category}:${input.seller}`} action="/products" className="catalog-filters">
         <label>Search products<input type="search" name="q" defaultValue={input.q} maxLength={100} placeholder="Phone, wireless headphones…" /></label>
         <label>Category<select name="category" defaultValue={input.category}><option value="">All categories</option>{categoryOptions.map((c) => <option value={c.slug} key={c.id}>{c.name}</option>)}</select></label>
         <label>Seller<select name="seller" defaultValue={input.seller || ""}><option value="">All sellers</option>{[...sellers].map(([id, names]) => <option value={id} key={id}>{names.join(" / ")}</option>)}</select></label>
